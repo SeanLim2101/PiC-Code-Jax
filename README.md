@@ -1,4 +1,4 @@
-#1D PiC Code for Simulating Plasmas with Google JAX
+# 1D PiC Code for Simulating Plasmas with Google JAX
 
 **An Imperial College London Undergraduate Research Opportunities Project by Sean Lim, supervised by Dr Aidan Crilly**
 
@@ -6,7 +6,7 @@ JAX enables users to solve multiple equations vectorially (with its vmap functio
 
 
 
-##Something about PiC codes and choices made in this code?
+## Something about PiC codes and choices made in this code?
 
 Stuff about Boris, yee grid, tldr averaging good
 
@@ -20,25 +20,25 @@ Note: only periodic BCs supported currently
 
 
 
-##Modules
+## Modules
 
-###particle_mover.py
+### particle_mover.py
 
 This module contains functions to solve equations of motions of particles. It uses the Boris algorithm, staggering position and velocity in time. It also includes a function for moving the particles when they leave the boundary, and a function for finding the E and B fields based on the particle’s position.
 
-###particles_to_grid.py
+### particles_to_grid.py
 
 This module contains functions to write the system’s charge density and current density onto the grid based on the particles’ positions. Particles have a triangular shape function spanning 2dx.
 
-###EM_solver.py
+### EM_solver.py
 
 This module contains functions for solving Maxwell’s Equations. This is done in 2 steps of dt/2 each, first updating the E-field before the B-field, then vice versa, because averaging good. It also contains a function, find_E0_by_matrix to help check if the initial conditions are correct (this may provide the wrong answer by a constant, hence it is recommended to manually calculate the E-field values).
 
-###diagnostics.py
+### diagnostics.py
 
 Contains functions to find system properties eg total kinetic energy, momentum, temperature at each cell point, etc.
 
-###simulation_module.py
+### simulation_module.py
 
 Simulation function is called with arguments (steps per snapshot, total steps, ICs, ext_fields, dx,dt). For neatness, the arguments in simulation are wrapped into an initial conditions sequence containing 3 sequences, (box size, particle parameters, fields). Box size contains (Lx,Ly,Lz). Particle parameters contains (particle initial positions, velocities, qs, ms, q/ms, the number of pseudo electrons, and the particle weights). Fields contains (array of E-fields,array of B-fields). ext_fields also contains (array of E-fields,array of B-fields).
 
@@ -54,7 +54,7 @@ CSV file names are 'time.csv','kinetic_energy.csv','E_x.csv','E_y.csv','E_z.csv'
 
 
 
-##Initialising the Simulation
+## Initialising the Simulation
 
 For N particles and M cells,
 Grid should be a length M array containing the centre of each cell.
@@ -65,7 +65,7 @@ E-fields and B-fields are Mx3 arrays.
 Some precautions: dx should be on the order of Debye length to avoid numerical heating. Make functions as smooth as possible, eg for EM waves, apply gaussian envelope or ensure no cutoff of EM waves. For particles, ensure left and right side of system match.
 
 
-##Examples
+## Examples
 
 In the examples folder there are some example simulations showing typical plasma behaviour. Includes plasma oscillations, plasma waves, plasma waves, 2-stream instability, weibel instability, hybrid oscillations.
 
