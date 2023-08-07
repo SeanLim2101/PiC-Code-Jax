@@ -17,13 +17,13 @@ box_size_y = 1e-2
 box_size_z = 1e-2
 box_size = (box_size_x,box_size_y,box_size_z)
 
-dx=1.5e-4
+dx=5e-4
 grid = jnp.arange(-box_size_x/2+dx/2,box_size_x/2+dx/2,dx)
 staggered_grid = grid + dx/2
 
 #Creating particle ICs, with xs defined half time step in front
 no_pseudoelectrons = 5000
-A=0.05
+A=0.1
 L=box_size_x
 k=2*jnp.pi/L
 seed = 1701
@@ -65,12 +65,6 @@ for i in range(len(grid)):
     E_fields = E_fields.at[i].set(jnp.array([-weight*1.6e-19*no_pseudoelectrons*A*jnp.sin(k*(grid[i]+dx/2))/(k*L*8.85e-12),0,0]))
 B_fields = jnp.zeros(shape=(len(grid),3))
 
-from particles_to_grid import find_chargedens_grid
-from EM_solver import find_E0_by_matrix
-chargedens = find_chargedens_grid(particle_xs_array,qs,dx,grid)
-E_field_from_matrix = jnp.array([find_E0_by_matrix(chargedens,dx,grid)])
-E_fields = jnp.transpose(jnp.concatenate((E_field_from_matrix,jnp.zeros(shape=(2,len(grid))))))
-
 fields = (E_fields,B_fields)
 
 ICs = (box_size,particles,fields)
@@ -82,8 +76,8 @@ ext_fields = (ext_E,ext_B)
 plt.title('Initial distribution of particles')
 x_to_plot = jnp.linspace(-L/2,L/2,100)
 plt.xlim([-box_size_x/2,box_size_x/2])
-plt.hist(particle_xs_array[no_pseudoelectrons:,0],jnp.arange(-box_size_x/2,box_size_x/2+dx,dx),color='red',label='ions')
-plt.hist(particle_xs_array[:no_pseudoelectrons,0],jnp.arange(-box_size_x/2,box_size_x/2+dx,dx),color='blue',label='electrons')
+plt.hist(particle_xs_array[no_pseudoelectrons:,0],jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1),color='red',label='ions')
+plt.hist(particle_xs_array[:no_pseudoelectrons,0],jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1),color='blue',label='electrons')
 plt.plot(x_to_plot, (no_pseudoelectrons/len(grid))*(1+A*jnp.cos(k*x_to_plot)))
 plt.legend()
 plt.show()
@@ -106,8 +100,8 @@ plt.plot(grid+dx/2,E_field_from_matrix,'x')
 #%%
 #Simulation
 dt = dx/(2*3e8)
-steps_per_snapshot=5
-total_steps=5000
+steps_per_snapshot=1
+total_steps=1000
 
 start = time.perf_counter()
 Data = simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt)
@@ -121,6 +115,7 @@ ke_over_time = Data['Kinetic Energy']
 plt.ylim(0.9*min(ke_over_time),1.1*max(ke_over_time))
 ke_drop = ((ke_over_time[-1]-ke_over_time[0])/ke_over_time[0])*100
 plt.plot(t,ke_over_time,label='Drop in KE = %.2f%%' %(ke_drop))
+#plt.axhline(34)
 plt.legend()
 plt.show()
 
@@ -174,8 +169,8 @@ for i in range(len(t)):
     plt.title('Particle positions at time %d'%(i))
     plt.ylim([0,1.5*no_pseudoelectrons/len(grid)])
     plt.xlim([-box_size_x/2,box_size_x/2])
-    plt.hist(xs_over_time[i,no_pseudoelectrons:,0],jnp.arange(-box_size_x/2,box_size_x/2+dx,dx),color='red',label='ions')
-    plt.hist(xs_over_time[i,:no_pseudoelectrons,0],jnp.arange(-box_size_x/2,box_size_x/2+dx,dx),color='blue',label='electrons')
+    plt.hist(xs_over_time[i,no_pseudoelectrons:,0],jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1),color='red',label='ions')
+    plt.hist(xs_over_time[i,:no_pseudoelectrons,0],jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1),color='blue',label='electrons')
     plt.legend()
     plt.pause(0.1)
     plt.cla()

@@ -20,12 +20,12 @@ def get_system_momentum(vs,ms):
     return jnp.sum(ms*vs,axis=0)
 
 @jit
-def get_E_energy(E_fields):
-    return 0.5*8.85e-12*vmap(jnp.dot)(E_fields,E_fields)
+def get_E_energy(E_fields,dx):
+    return 0.5*8.85e-12*vmap(jnp.dot)(E_fields,E_fields)/dx
 
 @jit
-def get_B_energy(B_fields):
-    return 0.5*vmap(jnp.dot)(B_fields,B_fields)/(4e-7*jnp.pi)
+def get_B_energy(B_fields,dx):
+    return 0.5*vmap(jnp.dot)(B_fields,B_fields)/(4e-7*jnp.pi)/dx
 
 @jit
 def Ts_in_cells(xs_n,vs_n,ms,weight,species_start,species_end,dx,grid,grid_start):

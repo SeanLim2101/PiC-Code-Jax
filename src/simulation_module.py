@@ -16,7 +16,8 @@ from diagnostics import get_system_ke,get_E_energy,get_B_energy,Ts_in_cells
 
 #Cycle
 @jit
-def one_cycle(params,qs,q_ms,dx,dt,grid,grid_start,staggered_grid,ext_E,ext_B,box_size_x,box_size_y,box_size_z):
+def one_cycle(params,qs,q_ms,dx,dt,grid,grid_start,staggered_grid,
+              ext_E,ext_B,box_size_x,box_size_y,box_size_z):
     xs_nplushalf = params[0]
     vs_n = params[1]
     E_fields = params[2]
@@ -32,17 +33,26 @@ def one_cycle(params,qs,q_ms,dx,dt,grid,grid_start,staggered_grid,ext_E,ext_B,bo
     #Find E&B fields and boris step
     total_E = E_fields+ext_E
     total_B = B_fields+ext_B
-    E_fields_at_x = vmap(lambda x_n: get_fields_at_x(x_n,total_E,dx,staggered_grid,grid_start+dx/2))(xs_nplushalf)
-    B_fields_at_x = vmap(lambda x_n: get_fields_at_x(x_n,total_B,dx,grid,grid_start))(xs_nplushalf)
-    xs_nplus3_2,vs_nplus1 = boris_step(dt,xs_nplushalf,vs_n,q_ms,E_fields_at_x,B_fields_at_x)
+    E_fields_at_x = vmap(lambda x_n: 
+                         get_fields_at_x(x_n,total_E,dx,staggered_grid,grid_start+dx/2)
+                         )(xs_nplushalf)
+    B_fields_at_x = vmap(lambda x_n: 
+                         get_fields_at_x(x_n,total_B,dx,grid,grid_start)
+                         )(xs_nplushalf)
+    xs_nplus3_2,vs_nplus1 = boris_step(dt,xs_nplushalf,vs_n,q_ms,
+                                       E_fields_at_x,B_fields_at_x)
     
     #Implement (periodic) BCs
-    xs_nplus3_2 = vmap(lambda x_n:set_BCs(x_n,box_size_x,box_size_y,box_size_z))(xs_nplus3_2)
+    xs_nplus3_2 = vmap(lambda x_n:
+                       set_BCs(x_n,box_size_x,box_size_y,box_size_z)
+                       )(xs_nplus3_2)
     
-    xs_nplus1 = vmap(lambda x_n:set_BCs(x_n,box_size_x,box_size_y,box_size_z))(xs_nplus3_2-(dt/2)*vs_nplus1)
+    xs_nplus1 = vmap(lambda x_n:
+                     set_BCs(x_n,box_size_x,box_size_y,box_size_z)
+                     )(xs_nplus3_2-(dt/2)*vs_nplus1)
     
     #find j from x_n3/2 and x_n1/2
-    j = find_j(xs_nminushalf,xs_n,xs_nplushalf,vs_n,qs,dx,dt,grid,grid_start)
+    j = find_j(xs_nplushalf,xs_nplus1,xs_nplus3_2,vs_n,qs,dx,dt,grid,grid_start)
     #1/2 step E&B field update
     E_fields, B_fields = field_update2(E_fields,B_fields,dx,dt/2,j)
     
@@ -50,9 +60,13 @@ def one_cycle(params,qs,q_ms,dx,dt,grid,grid_start,staggered_grid,ext_E,ext_B,bo
     return params
 
 @jit
-def n_cycles(n,xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n,qs,q_ms,dx,dt,grid,grid_start,staggered_grid,ext_E,ext_B,box_size_x,box_size_y,box_size_z):
+def n_cycles(n,xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n,
+             qs,q_ms,dx,dt,grid,grid_start,staggered_grid,
+             ext_E,ext_B,box_size_x,box_size_y,box_size_z):
     params_i = (xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n)
-    onecycle_fixed = lambda j,params:one_cycle(params,qs,q_ms,dx,dt,grid,grid_start,staggered_grid,ext_E,ext_B,box_size_x,box_size_y,box_size_z)
+    onecycle_fixed = lambda j,params:one_cycle(params,
+                                               qs,q_ms,dx,dt,grid,grid_start,staggered_grid,
+                                               ext_E,ext_B,box_size_x,box_size_y,box_size_z)
     params_iplusn = jax.lax.fori_loop(0,n,onecycle_fixed,params_i)
     return params_iplusn[0],params_iplusn[1],params_iplusn[2],params_iplusn[3],params_iplusn[4],params_iplusn[5]
 
@@ -68,9 +82,9 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,write_to_file
     ms=ICs[1][3]
     q_ms=ICs[1][4]
     
-    no_pseudoelectrons = ICs[1][5]
-    electrons_index = [0,no_pseudoelectrons]
-    ions_index = [no_pseudoelectrons+1,no_pseudoelectrons*2]
+    no_pseudo_species1 = ICs[1][5]
+    species1_index = [0,no_pseudo_species1]
+    species2_index = [no_pseudo_species1+1,no_pseudo_species1*2]
     weight = ICs[1][6]
     
     E_fields = ICs[2][0]
@@ -81,8 +95,12 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,write_to_file
     grid_start = grid[0]-dx/2
     staggered_grid = grid + dx/2
     
-    xs_nminushalf = vmap(lambda x_n:set_BCs(x_n,box_size_x,box_size_y,box_size_z))(xs_n-(dt/2)*vs_n)
-    xs_nplushalf = vmap(lambda x_n:set_BCs(x_n,box_size_x,box_size_y,box_size_z))(xs_n+(dt/2)*vs_n)
+    xs_nplushalf = vmap(lambda x_n:
+                         set_BCs(x_n,box_size_x,box_size_y,box_size_z)
+                         )(xs_n+(dt/2)*vs_n)
+    xs_nminushalf = vmap(lambda x_n:
+                        set_BCs(x_n,box_size_x,box_size_y,box_size_z)
+                        )(xs_n-(dt/2)*vs_n)
     
     if write_to_file == True:
         
@@ -93,11 +111,13 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,write_to_file
         datafile_names = ['time.csv','kinetic_energy.csv',
                           'E_x.csv','E_y.csv','E_z.csv','E_energy_densities.csv',
                           'B_x.csv','B_y.csv','B_z.csv','B_energy_densities.csv',
-                          'chargedens.csv','electron_temp.csv','ion_temp.csv']
+                          'chargedens.csv','species1_no_densities.csv','species2_no_densities.csv',
+                          'species1_temp.csv','species2_temp.csv']
         datafile_headers = [['t/s'],['kinetic energy/J'],
                             cell_headers,cell_headers,cell_headers,cell_headers,
                             cell_headers,cell_headers,cell_headers,cell_headers,
-                            cell_headers,cell_headers,cell_headers]
+                            cell_headers,cell_headers,cell_headers,
+                            cell_headers,cell_headers]
         
         for i,file in enumerate(datafile_names):
             with open(file,'w') as f:
@@ -109,6 +129,7 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,write_to_file
         ke_over_time = []
         xs_over_time = []
         vs_over_time = []
+        js_over_time = []
         E_fields_over_time = []
         E_field_energy = []
         B_fields_over_time = []
@@ -120,38 +141,49 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,write_to_file
     steps_taken = 0
     while steps_taken<total_steps:  
         #Perform n cycles
-        xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n = n_cycles(steps_per_snapshot,xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n,qs,q_ms,dx,dt,grid,grid_start,staggered_grid,ext_E,ext_B,box_size_x,box_size_y,box_size_z)    
+        xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n = n_cycles(steps_per_snapshot,
+                                                                          xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n,
+                                                                          qs,q_ms,dx,dt,grid,grid_start,staggered_grid,
+                                                                          ext_E,ext_B,box_size_x,box_size_y,box_size_z)    
         
         steps_taken += steps_per_snapshot
         current_t += steps_per_snapshot*dt
         
         #Get data
         chargedens_n = find_chargedens_grid(xs_n,qs,dx,grid)
-        electron_temps = Ts_in_cells(xs_n,vs_n,ms,weight,electrons_index[0],electrons_index[1],dx,grid,grid_start)
-        ion_temps = Ts_in_cells(xs_n,vs_n,ms,weight,ions_index[0],ions_index[1],dx,grid,grid_start)
-        
+        n1_t = jnp.histogram(xs_n[species1_index[0]:species1_index[1],0],
+                             bins=jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1))[0]
+        n2_t = jnp.histogram(xs_n[species2_index[0]:species2_index[1],0],
+                             bins=jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1))[0]
+        species1_temps = Ts_in_cells(xs_n,vs_n,ms,weight,
+                                     species1_index[0],species1_index[1],dx,grid,grid_start)
+        species2_temps = Ts_in_cells(xs_n,vs_n,ms,weight,
+                                species2_index[0],species2_index[1],dx,grid,grid_start)
+        j = find_j(xs_nminushalf,xs_n,xs_nplushalf,vs_n,qs,dx,dt,grid,grid_start)
+
         if write_to_file == True:
             datas = [[current_t],[get_system_ke(vs_n,ms)],
-                     E_fields[:,0],E_fields[:,1],E_fields[:,2],get_E_energy(E_fields),
-                     B_fields[:,0],B_fields[:,1],B_fields[:,2],get_B_energy(B_fields),
-                     chargedens_n,electron_temps,ion_temps]
+                     E_fields[:,0],E_fields[:,1],E_fields[:,2],get_E_energy(E_fields,dx),
+                     B_fields[:,0],B_fields[:,1],B_fields[:,2],get_B_energy(B_fields,dx),
+                     chargedens_n,n1_t,n2_t,
+                     species1_temps,species2_temps]
             for i,data in enumerate(datas):
                 with open(datafile_names[i],'a') as f:
                     writer = csv.writer(f)
                     writer.writerow(data)
 
-               
         elif write_to_file == False:
             t.append(current_t)
             ke_over_time.append(get_system_ke(vs_n,ms))
             xs_over_time.append(xs_nplushalf)
             vs_over_time.append(vs_n)
             E_fields_over_time.append(E_fields)
-            E_field_energy.append(get_E_energy(E_fields))
+            E_field_energy.append(get_E_energy(E_fields,dx))
             B_fields_over_time.append(B_fields)
-            B_field_energy.append(get_B_energy(B_fields))
-            chargedens_over_time.append(chargedens_n)     
-            Ts_over_time.append((electron_temps,ion_temps))
+            B_field_energy.append(get_B_energy(B_fields,dx))
+            chargedens_over_time.append(chargedens_n)  
+            js_over_time.append(j)   
+            Ts_over_time.append((species1_temps,species2_temps))
     
     if write_to_file == False:
         return {'Time':t,
@@ -163,5 +195,6 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,write_to_file
                 'B-fields':B_fields_over_time,
                 'B-field Energy':B_field_energy,
                 'Charge Densities':chargedens_over_time,
+                'Current Densities':js_over_time,
                 'Temperature':Ts_over_time,
                 }
