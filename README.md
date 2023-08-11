@@ -16,9 +16,6 @@ Stuff about solving j using charge conservation eqn & feeding into Maxwell eqn i
 
 Insert diagram of one cycle?
 
-Note: only periodic BCs supported currently
-
-
 
 ## Modules
 
@@ -40,7 +37,9 @@ Contains functions to find system properties eg total kinetic energy, momentum, 
 
 ### simulation_module.py
 
-Simulation function is called with arguments (steps per snapshot, total steps, ICs, ext_fields, dx,dt). For neatness, the arguments in simulation are wrapped into an initial conditions sequence containing 3 sequences, (box size, particle parameters, fields). Box size contains (Lx,Ly,Lz). Particle parameters contains (particle initial positions, velocities, qs, ms, q/ms, the number of pseudo electrons, and the particle weights). Fields contains (array of E-fields,array of B-fields). ext_fields also contains (array of E-fields,array of B-fields).
+Simulation function is called with arguments (steps per snapshot, total steps, ICs, ext_fields, dx,dt,BC_left,BC_right). For neatness, the arguments in simulation are wrapped into an initial conditions sequence containing 3 sequences, (box size, particle parameters, fields). Box size contains (Lx,Ly,Lz). Particle parameters contains (particle initial positions, velocities, qs, ms, q/ms, the number of pseudo electrons, and the particle weights). Fields contains (array of E-fields,array of B-fields). ext_fields also contains (array of E-fields,array of B-fields).
+
+BC_left and BC_right are integers determining the boundary conditions on the left and right. 0 is periodic, 1 is reflective, 2 is destructive (WIP)
 
 It has 2 options to save data, either by returning a dictionary, or by saving into a set of csv files. This is specified with the argument write_to_file (default false)
 
@@ -68,10 +67,3 @@ Some precautions: dx should be on the order of Debye length to avoid numerical h
 ## Examples
 
 In the examples folder there are some example simulations showing typical plasma behaviour. Includes plasma oscillations, plasma waves, plasma waves, 2-stream instability, weibel instability, hybrid oscillations.
-
-
-
-Current problems: 
-
-plasma oscillations: ke increasing, will test further next week
-& test and add other plasma effects
