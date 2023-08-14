@@ -110,7 +110,7 @@ steps_per_snapshots=5
 total_steps=3000
 
 start = time.perf_counter()
-Data = simulation(steps_per_snapshots,total_steps,ICs,ext_fields,dx,dt)
+Data = simulation(steps_per_snapshots,total_steps,ICs,ext_fields,dx,dt,0,0,0,0)
 end = time.perf_counter()
 print('Simulation complete, time taken: '+str(end-start)+'s')
 
@@ -122,8 +122,8 @@ vs_over_time = jnp.array(Data['Velocities'])
 for i in range(len(t)):
     plt.title('Number of electrons in Phase Space at timestep '+str(i*steps_per_snapshots))
     plt.hist2d(xs_over_time[i,:no_pseudoelectrons,0],vs_over_time[i,:no_pseudoelectrons,0],jnp.array([len(grid),30]),[[-box_size_x/2,box_size_x/2],[-2*v0,2*v0]],cmap='plasma')
-    plt.xlabel('x-position')
-    plt.ylabel('vx')
+    plt.xlabel('x')
+    plt.ylabel(r'$v_x$')
     cb = plt.colorbar()
     plt.pause(0.1)
     cb.remove()

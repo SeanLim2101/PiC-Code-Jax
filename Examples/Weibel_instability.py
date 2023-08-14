@@ -80,7 +80,7 @@ steps_per_snapshot=5
 total_steps=2000
 
 start = time.perf_counter()
-Data = simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt)
+Data = simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,0,0,0,0)
 end = time.perf_counter()
 print('Simulation complete, time taken: '+str(end-start)+'s')
 
@@ -90,9 +90,9 @@ xs_over_time = jnp.array(Data['Positions'])
 B_field_densities = jnp.array(Data['B-field Energy'])
 
 for i in range(len(t)):
-    plt.title('Trajectory of particles at time '+str(i*steps_per_snapshot))
-    plt.scatter(xs_over_time[i,:no_pseudoelectrons:int(no_pseudoelectrons/100),0],xs_over_time[i,:no_pseudoelectrons:int(no_pseudoelectrons/100),2],color='red')
-    plt.scatter(xs_over_time[i,1:no_pseudoelectrons-1:int(no_pseudoelectrons/100),0],xs_over_time[i,1:no_pseudoelectrons-1:int(no_pseudoelectrons/100),2],color='blue')    
+    plt.title('Trajectory of particles at timestep '+str(i*steps_per_snapshot))
+    plt.scatter(xs_over_time[i,:no_pseudoelectrons:int(no_pseudoelectrons/100),0],xs_over_time[i,:no_pseudoelectrons:int(no_pseudoelectrons/100),2],marker='^',color='red')
+    plt.scatter(xs_over_time[i,1:no_pseudoelectrons-1:int(no_pseudoelectrons/100),0],xs_over_time[i,1:no_pseudoelectrons-1:int(no_pseudoelectrons/100),2],marker='v',color='blue')    
     plt.imshow(jnp.tile(B_field_densities[i],reps=(10,1)),extent=[-box_size_x/2,box_size_x/2,-box_size_z/2,box_size_z/2],origin='lower',interpolation='bilinear',vmin=0)
     cb = plt.colorbar(label='B-field density')
     plt.xlim([-box_size_x/2,box_size_x/2])

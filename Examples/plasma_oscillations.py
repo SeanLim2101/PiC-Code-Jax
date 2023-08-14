@@ -17,7 +17,7 @@ box_size_y = 1e-2
 box_size_z = 1e-2
 box_size = (box_size_x,box_size_y,box_size_z)
 
-dx=5e-4
+dx=1e-3
 grid = jnp.arange(-box_size_x/2+dx/2,box_size_x/2+dx/2,dx)
 staggered_grid = grid + dx/2
 
@@ -46,7 +46,7 @@ no_pseudoparticles = len(particle_xs_array)
 particle_vs_array = jnp.zeros(shape=(no_pseudoparticles,3))
 
 w0 = jnp.pi*3e8/(25*dx)
-weight = 3.15e-4*w0**2*L/(no_pseudoelectrons) #Need 1/10 to make wp correct? A not supposed to be there?
+weight = 3.15e-4*w0**2*L/(no_pseudoelectrons) 
 q_es = -1.6e-19*weight*jnp.ones(shape=(no_pseudoelectrons,1))
 q_ps = 1.6e-19*weight*jnp.ones(shape=(no_pseudoelectrons,1))
 qs = jnp.concatenate((q_es,q_ps))
@@ -91,7 +91,7 @@ plt.show()
 #Check E-field amplitude is correct
 from particles_to_grid import find_chargedens_grid
 from EM_solver import find_E0_by_matrix
-chargedens = find_chargedens_grid(particle_xs_array,qs,dx,grid)
+chargedens = find_chargedens_grid(particle_xs_array,qs,dx,grid,1,1)
 E_field_from_matrix = find_E0_by_matrix(chargedens,dx,grid)
 plt.title('E-field from matrix')
 plt.xlim([-box_size_x/2,box_size_x/2])
@@ -100,18 +100,18 @@ plt.plot(grid+dx/2,E_field_from_matrix,'x')
 #%%
 #Simulation
 dt = dx/(2*3e8)
-steps_per_snapshot=1
-total_steps=1000
+steps_per_snapshot=5
+total_steps=400
 
 start = time.perf_counter()
-Data = simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt)
+Data = simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,0,0,0,0)
 end = time.perf_counter()
 print('Simulation complete, time taken: '+str(end-start)+'s')
 
 t = jnp.array(Data['Time'])
 #%%
 plt.title('Kinetic energy over time')
-ke_over_time = Data['Kinetic Energy']
+ke_over_time = jnp.array(Data['Kinetic Energy'])
 plt.ylim(0.9*min(ke_over_time),1.1*max(ke_over_time))
 ke_drop = ((ke_over_time[-1]-ke_over_time[0])/ke_over_time[0])*100
 plt.plot(t,ke_over_time,label='Drop in KE = %.2f%%' %(ke_drop))
@@ -137,7 +137,7 @@ plt.legend()
 #%%
 chargedens_over_time = jnp.array(Data['Charge Densities'])
 for i in range(len(t)):
-    plt.title('Charge density at time %d'%(i))
+    plt.title('Charge density at time %d'%(i*steps_per_snapshot))
     plt.plot(grid,chargedens_over_time[i,:])
     plt.xlim([-box_size_x/2,box_size_x/2])
     plt.ylim([0.9*min(chargedens_over_time[0,:]),1.1*max(chargedens_over_time[0,:])])
@@ -147,7 +147,7 @@ for i in range(len(t)):
 #%%
 E_fields_over_time = jnp.array(Data['E-fields'])
 for i in range(len(t)):
-    plt.title('E-field at time %d'%(i))
+    plt.title('E-field at time %d'%(i*steps_per_snapshot))
     plt.plot(grid+dx/2,E_fields_over_time[i,:,0])
     plt.ylim([0.9*min(E_fields_over_time[0,:,0]),1.1*max(E_fields_over_time[0,:,0])])
     plt.pause(0.1)
@@ -156,8 +156,8 @@ for i in range(len(t)):
 #%%
 js_over_time = jnp.array(Data['Current Densities'])
 for i in range(len(t)):
-    plt.title('Current density at time %d'%(i))
-    plt.ylim([0.9*min(8.85e-12*3*w0*E_fields_over_time[0,:,0]),1.1*max(8.85e-12*3*w0*E_fields_over_time[0,:,0])])
+    plt.title('Current density at time %d'%(i*steps_per_snapshot))
+    #plt.ylim([0.9*min(8.85e-12*3*w0*E_fields_over_time[0,:,0]),1.1*max(8.85e-12*3*w0*E_fields_over_time[0,:,0])])
     plt.plot(grid+dx/2,js_over_time[i,:,0])
     plt.xlim([-box_size_x/2,box_size_x/2])
     plt.pause(0.1)
@@ -166,7 +166,7 @@ for i in range(len(t)):
 #%%
 xs_over_time = jnp.array(Data['Positions'])
 for i in range(len(t)):
-    plt.title('Particle positions at time %d'%(i))
+    plt.title('Particle positions at timestep %d'%(i*steps_per_snapshot))
     plt.ylim([0,1.5*no_pseudoelectrons/len(grid)])
     plt.xlim([-box_size_x/2,box_size_x/2])
     plt.hist(xs_over_time[i,no_pseudoelectrons:,0],jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1),color='red',label='ions')

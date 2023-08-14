@@ -13,12 +13,13 @@ from particle_mover import get_fields_at_x,boris_step
 from EM_solver import field_update1,field_update2
 from particles_to_grid import find_j,find_chargedens_grid
 from diagnostics import get_system_ke,get_E_energy,get_B_energy,Ts_in_cells
-from boundary_conditions import set_BCs_all,set_BCs_all_midsteps
+from boundary_conditions import set_BCs_all,set_BCs_all_midsteps,remove_particles
 
 #Cycle
-@jit
 def one_cycle(params,dx,dt,grid,grid_start,staggered_grid,
-              ext_E,ext_B,box_size_x,box_size_y,box_size_z,BC_left,BC_right):
+              ext_E,ext_B,box_size_x,box_size_y,box_size_z,
+              part_BC_left,part_BC_right,field_BC_left,field_BC_right,
+              laser_mag,laser_k):
     xs_nplushalf = params[0]
     vs_n = params[1]
     E_fields = params[2]
@@ -28,51 +29,58 @@ def one_cycle(params,dx,dt,grid,grid_start,staggered_grid,
     qs = params[6]
     ms = params[7]
     q_ms = params[8]
+    t = params[9]
     
     #find j from x_n-1/2 and x_n+1/2 first
-    j = jax.block_until_ready(find_j(xs_nminushalf,xs_n,xs_nplushalf,vs_n,qs,dx,dt,grid,grid_start,BC_left,BC_right))
+    j = jax.block_until_ready(find_j(xs_nminushalf,xs_n,xs_nplushalf,vs_n,qs,dx,dt,grid,grid_start,part_BC_left,part_BC_right))
     #1/2 step E&B field update
-    E_fields, B_fields = jax.block_until_ready(field_update1(E_fields,B_fields,dx,dt/2,j,BC_left,BC_right))
+    E_fields, B_fields = jax.block_until_ready(field_update1(E_fields,B_fields,dx,dt/2,j,field_BC_left,field_BC_right,t,laser_mag,laser_k))
     
     #Find E&B fields and boris step
     total_E = E_fields+ext_E
     total_B = B_fields+ext_B
     E_fields_at_x = jax.block_until_ready(vmap(lambda x_n: 
-                                               get_fields_at_x(x_n,total_E,dx,staggered_grid,grid_start+dx/2,BC_left,BC_right)
+                                               get_fields_at_x(x_n,total_E,dx,staggered_grid,grid_start+dx/2,part_BC_left,part_BC_right)
                                                )(xs_nplushalf))
     B_fields_at_x = jax.block_until_ready(vmap(lambda x_n: 
-                                               get_fields_at_x(x_n,total_B,dx,grid,grid_start,BC_left,BC_right)
+                                               get_fields_at_x(x_n,total_B,dx,grid,grid_start,part_BC_left,part_BC_right)
                                                )(xs_nplushalf))
     xs_nplus3_2,vs_nplus1 = jax.block_until_ready(boris_step(dt,xs_nplushalf,vs_n,q_ms,
                                                              E_fields_at_x,B_fields_at_x))
     
     #Implement BCs
-    xs_nplus3_2,vs_nplus1,qs,ms,q_ms = jax.block_until_ready(set_BCs_all(xs_nplus3_2,vs_nplus1,qs,ms,q_ms,box_size_x,box_size_y,box_size_z,BC_left,BC_right))
+    xs_nplus3_2,vs_nplus1,qs,ms,q_ms = jax.block_until_ready(set_BCs_all(xs_nplus3_2,vs_nplus1,qs,ms,q_ms,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right))
     
-    xs_nplus1 = jax.block_until_ready(set_BCs_all_midsteps(xs_nplus3_2-(dt/2)*vs_nplus1,qs,box_size_x,box_size_y,box_size_z,BC_left,BC_right))
+    xs_nplus1 = jax.block_until_ready(set_BCs_all_midsteps(xs_nplus3_2-(dt/2)*vs_nplus1,qs,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right))
     
     #find j from x_n3/2 and x_n1/2
-    j = jax.block_until_ready(find_j(xs_nplushalf,xs_nplus1,xs_nplus3_2,vs_nplus1,qs,dx,dt,grid,grid_start,BC_left,BC_right))
+    j = jax.block_until_ready(find_j(xs_nplushalf,xs_nplus1,xs_nplus3_2,vs_nplus1,qs,dx,dt,grid,grid_start,part_BC_left,part_BC_right))
     #1/2 step E&B field update
-    E_fields, B_fields = jax.block_until_ready(field_update2(E_fields,B_fields,dx,dt/2,j,BC_left,BC_right))
+    E_fields, B_fields = jax.block_until_ready(field_update2(E_fields,B_fields,dx,dt/2,j,field_BC_left,field_BC_right,t,laser_mag,laser_k))
     
-    params = (xs_nplus3_2,vs_nplus1,E_fields,B_fields,xs_nplushalf,xs_nplus1,qs,ms,q_ms)
+    t += dt
+    params = (xs_nplus3_2,vs_nplus1,E_fields,B_fields,xs_nplushalf,xs_nplus1,qs,ms,q_ms,t)
     return params
 
 @jit
 def n_cycles(n,xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n,
-             qs,ms,q_ms,dx,dt,grid,grid_start,staggered_grid,
+             qs,ms,q_ms,t,dx,dt,grid,grid_start,staggered_grid,
              ext_E,ext_B,box_size_x,box_size_y,box_size_z,
-             BC_left,BC_right):
-    params_i = (xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n,qs,ms,q_ms)
+             part_BC_left,part_BC_right,field_BC_left,field_BC_right,
+             laser_mag,laser_k):
+    params_i = (xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n,qs,ms,q_ms,t)
     onecycle_fixed = lambda j,params:one_cycle(params,
                                                dx,dt,grid,grid_start,staggered_grid,
                                                ext_E,ext_B,box_size_x,box_size_y,box_size_z,
-                                               BC_left,BC_right)
+                                               part_BC_left,part_BC_right,field_BC_left,field_BC_right,
+                                               laser_mag,laser_k)
     params_iplusn = jax.lax.fori_loop(0,n,onecycle_fixed,params_i)
-    return params_iplusn[0],params_iplusn[1],params_iplusn[2],params_iplusn[3],params_iplusn[4],params_iplusn[5],params_iplusn[6],params_iplusn[7],params_iplusn[8]
+    return params_iplusn[0],params_iplusn[1],params_iplusn[2],params_iplusn[3],params_iplusn[4],params_iplusn[5],params_iplusn[6],params_iplusn[7],params_iplusn[8],params_iplusn[9]
 
-def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,BC_left,BC_right,write_to_file = False):
+def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
+               part_BC_left,part_BC_right,field_BC_left,field_BC_right,
+               laser_mag = 0, laser_k = 0,
+               write_to_file = False):
     #Unpack ICs
     box_size_x=ICs[0][0]
     box_size_y=ICs[0][1]
@@ -83,7 +91,6 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,BC_left,BC_ri
     qs=ICs[1][2]
     ms=ICs[1][3]
     q_ms=ICs[1][4]
-    
     no_pseudo_species1 = ICs[1][5]
     species1_index = [0,no_pseudo_species1]
     species2_index = [no_pseudo_species1+1,no_pseudo_species1*2]
@@ -97,8 +104,8 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,BC_left,BC_ri
     grid_start = grid[0]-dx/2
     staggered_grid = grid + dx/2
     
-    xs_nplushalf,vs_n,qs,ms,q_ms = jax.block_until_ready(set_BCs_all(xs_n+(dt/2)*vs_n,vs_n,qs,ms,q_ms,box_size_x,box_size_y,box_size_z,BC_left,BC_right))
-    xs_nminushalf = jax.block_until_ready(set_BCs_all_midsteps(xs_n-(dt/2)*vs_n,qs,box_size_x,box_size_y,box_size_z,BC_left,BC_right))
+    xs_nplushalf,vs_n,qs,ms,q_ms = jax.block_until_ready(set_BCs_all(xs_n+(dt/2)*vs_n,vs_n,qs,ms,q_ms,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right))
+    xs_nminushalf = jax.block_until_ready(set_BCs_all_midsteps(xs_n-(dt/2)*vs_n,qs,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right))
     
     if write_to_file == True:
         
@@ -125,7 +132,7 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,BC_left,BC_ri
                 writer.writerow(datafile_headers[i])
                 
     elif write_to_file == False:
-        t = []
+        ts = []
         ke_over_time = []
         xs_over_time = []
         vs_over_time = []
@@ -137,21 +144,24 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,BC_left,BC_ri
         chargedens_over_time = []
         Ts_over_time = []
     
-    current_t = 0
+    t = 0
     steps_taken = 0
     while steps_taken<total_steps:  
         #Perform n cycles
-        xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n,qs,ms,q_ms = n_cycles(steps_per_snapshot,
-                                                                                     xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n,
-                                                                                     qs,ms,q_ms,dx,dt,grid,grid_start,staggered_grid,
-                                                                                     ext_E,ext_B,box_size_x,box_size_y,box_size_z,
-                                                                                     BC_left,BC_right)
+        xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n,qs,ms,q_ms,t = n_cycles(steps_per_snapshot,
+                                                                                       xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n,
+                                                                                       qs,ms,q_ms,t,dx,dt,grid,grid_start,staggered_grid,
+                                                                                       ext_E,ext_B,box_size_x,box_size_y,box_size_z,
+                                                                                       part_BC_left,part_BC_right,field_BC_left,field_BC_right,
+                                                                                       laser_mag,laser_k)
+        
+        if part_BC_left == 2 or part_BC_right == 2: #Remove particles from simulation, but takes a while to run
+            xs_nplushalf,xs_nminushalf,vs_n,qs,ms,q_ms,xs_n = remove_particles(xs_nplushalf,xs_n,xs_nminushalf,vs_n,qs,ms,q_ms,box_size_x,part_BC_left,part_BC_right)
         
         steps_taken += steps_per_snapshot
-        current_t += steps_per_snapshot*dt
         
         #Get data
-        chargedens_n = jax.block_until_ready(find_chargedens_grid(xs_n,qs,dx,grid,BC_left,BC_right))
+        chargedens_n = jax.block_until_ready(find_chargedens_grid(xs_n,qs,dx,grid,part_BC_left,part_BC_right))
         n1_t = jnp.histogram(xs_n[species1_index[0]:species1_index[1],0],
                              bins=jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1))[0]
         n2_t = jnp.histogram(xs_n[species2_index[0]:species2_index[1],0],
@@ -162,7 +172,7 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,BC_left,BC_ri
                                                            species2_index[0],species2_index[1],dx,grid,grid_start))
         #j = jax.block_until_ready(find_j(xs_nminushalf,xs_n,xs_nplushalf,vs_n,qs,dx,dt,grid,grid_start,BC_left,BC_right))
         
-        datas = [[current_t],[jax.block_until_ready(get_system_ke(vs_n,ms))],
+        datas = [[t],[jax.block_until_ready(get_system_ke(vs_n,ms))],
                  E_fields[:,0],E_fields[:,1],E_fields[:,2],jax.block_until_ready(get_E_energy(E_fields,dx)),
                  B_fields[:,0],B_fields[:,1],B_fields[:,2],jax.block_until_ready(get_B_energy(B_fields,dx)),
                  chargedens_n,
@@ -176,7 +186,7 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,BC_left,BC_ri
                     writer.writerow(data)
 
         elif write_to_file == False:
-            t.append(datas[0][0])
+            ts.append(datas[0][0])
             ke_over_time.append(datas[1][0])
             xs_over_time.append(xs_nplushalf)
             vs_over_time.append(vs_n)
@@ -189,7 +199,7 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,BC_left,BC_ri
             Ts_over_time.append((datas[12],datas[13]))
     
     if write_to_file == False:
-        return {'Time':t,
+        return {'Time':ts,
                 'Kinetic Energy':ke_over_time,
                 'Positions':xs_over_time,
                 'Velocities':vs_over_time,

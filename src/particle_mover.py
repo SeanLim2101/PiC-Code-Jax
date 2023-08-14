@@ -8,30 +8,32 @@ Created on Fri Aug  4 12:50:35 2023
 
 from jax import vmap, jit
 import jax.numpy as jnp
-from boundary_conditions import field_ghost_cells
+from boundary_conditions import field_2_ghost_cells
 
 
 "Field-to-particle function"
-@jit
+
 def get_fields_at_x(x_n,field,dx,grid,grid_start,BC_left,BC_right):
-    ghost_cell_L, ghost_cell_R = field_ghost_cells(BC_left,BC_right,field)
-    field = jnp.insert(field,0,ghost_cell_L,axis=0)
+    ghost_cell_L1, ghost_cell_L2, ghost_cell_R = field_2_ghost_cells(BC_left,BC_right,field)
+    field = jnp.insert(field,0,ghost_cell_L1,axis=0)
+    field = jnp.insert(field,0,ghost_cell_L2,axis=0)
     field = jnp.append(field,jnp.array([ghost_cell_R]),axis=0)
-    x = (x_n[0]-grid_start)%(grid[-1]-grid[0]+dx)+grid_start #If using a staggered grid, particles at half of 0th cell will be out of grid
-    i = ((x-grid_start)//dx).astype(int)
+    x = x_n[0]
+    grid = jnp.insert(grid,0,grid[0]-dx,axis=0) #If using a staggered grid, particles at half of 0th cell will be out of grid, so add extra grid
+    i = ((x-grid_start+dx)//dx).astype(int)
     fields_n = 0.5*field[i]*(0.5+(grid[i]-x)/dx)**2 + field[i+1]*(0.75-(grid[i]-x)**2/dx**2) + 0.5*field[i+2]*(0.5-(grid[i]-x)/dx)**2
     return fields_n
 
 
 "Particle mover"
-@jit
+
 def rotation(dt,B,vsub,q_m):
     Rvec = vsub+0.5*dt*(q_m)*jnp.cross(vsub,B)
     Bvec = 0.5*q_m*dt*B
     vplus = (jnp.cross(Rvec,Bvec)+jnp.dot(Rvec,Bvec)*Bvec+Rvec)/(1+jnp.dot(Bvec,Bvec))
     return vplus
 
-@jit
+
 def boris_step(dt,xs_nplushalf,vs_n,q_ms,E_fields_at_x,B_fields_at_x):
     vs_n_int = vs_n + (q_ms)*E_fields_at_x*dt/2
     vs_n_rot = vmap(lambda B_n,v_n,q_ms:rotation(dt,B_n,v_n,q_ms))(B_fields_at_x,vs_n_int,q_ms[:,0])

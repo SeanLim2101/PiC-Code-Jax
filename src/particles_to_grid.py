@@ -10,12 +10,12 @@ import jax
 import jax.numpy as jnp
 from boundary_conditions import chargedens_BCs
 
-@jit
+
 def find_chargedens_1particle(x,q,dx,grid,BC_left,BC_right):
     grid_noBCs =  (q/dx)*jnp.where(abs(x-grid)<=dx/2,3/4-(x-grid)**2/(dx**2),
-                        jnp.where((dx/2<abs(x-grid))&(abs(x-grid)<=3*dx/2),
-                                  0.5*(3/2-abs(x-grid)/dx)**2,
-                                  jnp.zeros(len(grid))))
+                         jnp.where((dx/2<abs(x-grid))&(abs(x-grid)<=3*dx/2),
+                                    0.5*(3/2-abs(x-grid)/dx)**2,
+                                    jnp.zeros(len(grid))))
     chargedens_for_L,chargedens_for_R = chargedens_BCs(BC_left,BC_right,x,dx,grid,q)
     grid_BCs = grid_noBCs.at[0].set(chargedens_for_L+grid_noBCs[0])
     grid_BCs = grid_BCs.at[-1].set(chargedens_for_R+grid_BCs[-1])
