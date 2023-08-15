@@ -8,7 +8,6 @@ Created on Tue Aug  8 17:10:05 2023
 
 from jax import jit,vmap
 import jax.numpy as jnp
-import jax
 #For particles,
 #0 is periodic
 #1 is reflective
@@ -16,55 +15,55 @@ import jax
 #For EM,
 #0 is periodic
 #1 is reflective
-#2 is destructive (WIP)
+#2 is transmissive
 #3 is laser
 
 
-def field_ghost_cells_E(field_BC_left,field_BC_right,field,dx,current_t,E0,k):
+def field_ghost_cells_E(field_BC_left,field_BC_right,E_field,B_field,dx,current_t,E0,k):
     #For EM solver
-    field_ghost_cell_L = jnp.where(field_BC_left==0,field[-1],
-                         jnp.where(field_BC_left==1,field[0],
-                         jnp.where(field_BC_left==2,field[0]*jnp.e**(-dx),
+    field_ghost_cell_L = jnp.where(field_BC_left==0,E_field[-1],
+                         jnp.where(field_BC_left==1,E_field[0],
+                         jnp.where(field_BC_left==2,jnp.array([0,-2*3e8*B_field[0,2]-E_field[0,1],2*3e8*B_field[0,1]-E_field[0,2]]),
                          jnp.where(field_BC_left==3,jnp.array([0,E0*jnp.sin(3e8*k*current_t),0]),
                                    jnp.array([0,0,0])))))
-    field_ghost_cell_R = jnp.where(field_BC_right==0,field[0],
-                         jnp.where(field_BC_right==1,field[-1],
-                         jnp.where(field_BC_right==2,field[-1]*jnp.e**(-dx),
+    field_ghost_cell_R = jnp.where(field_BC_right==0,E_field[0],
+                         jnp.where(field_BC_right==1,E_field[-1],
+                         jnp.where(field_BC_right==2,jnp.array([0,3*E_field[-1,1]-2*3e8*B_field[-1,2],3*E_field[-1,2]+2*3e8*B_field[-1,1]]),
                          jnp.where(field_BC_right==3,jnp.array([0,E0*jnp.sin(3e8*k*current_t),0]),
                                    jnp.array([0,0,0])))))
     return field_ghost_cell_L, field_ghost_cell_R
 
-def field_ghost_cells_B(field_BC_left,field_BC_right,field,dx,current_t,B0,k):
+def field_ghost_cells_B(field_BC_left,field_BC_right,B_field,E_field,dx,current_t,B0,k):
     #For EM solver
-    field_ghost_cell_L = jnp.where(field_BC_left==0,field[-1],
-                         jnp.where(field_BC_left==1,field[0],
-                         jnp.where(field_BC_left==2,field[0]*jnp.e**(-dx),
+    field_ghost_cell_L = jnp.where(field_BC_left==0,B_field[-1],
+                         jnp.where(field_BC_left==1,B_field[0],
+                         jnp.where(field_BC_left==2,jnp.array([0,3*B_field[0,1]-(2/3e8)*E_field[0,2],3*B_field[0,2]+(2/3e8)*E_field[0,1]]),
                          jnp.where(field_BC_left==3,jnp.array([0,0,B0*jnp.sin(3e8*k*current_t)]),
                                    jnp.array([0,0,0])))))
-    field_ghost_cell_R = jnp.where(field_BC_right==0,field[0],
-                         jnp.where(field_BC_right==1,field[-1],
-                         jnp.where(field_BC_right==2,field[-1]*jnp.e**(-dx),
+    field_ghost_cell_R = jnp.where(field_BC_right==0,B_field[0],
+                         jnp.where(field_BC_right==1,B_field[-1],
+                         jnp.where(field_BC_right==2,jnp.array([0,-(2/3e8)*E_field[-1,2]-B_field[-1,1],(2/3e8)*E_field[-1,1]-B_field[-1,2]]),
                          jnp.where(field_BC_right==3,jnp.array([0,0,B0*jnp.sin(3e8*k*current_t)]),
                                    jnp.array([0,0,0])))))
     return field_ghost_cell_L, field_ghost_cell_R
 
-def field_2_ghost_cells(field_BC_left,field_BC_right,field):
+def field_2_ghost_cells(part_BC_left,part_BC_right,field):
     #For returning fields to particles
-    field_ghost_cell_L1 = jnp.where(field_BC_left==0,field[-1],
-                          jnp.where(field_BC_left==1,field[0],
-                          jnp.where(field_BC_left==2,jnp.array([0,0,0]),
+    field_ghost_cell_L2 = jnp.where(part_BC_left==0,field[-2],
+                          jnp.where(part_BC_left==1,field[1],
+                          jnp.where(part_BC_left==2,jnp.array([0,0,0]),
                                     jnp.array([0,0,0]))))
-    field_ghost_cell_L2 = jnp.where(field_BC_left==0,field[-2],
-                          jnp.where(field_BC_left==1,field[1],
-                          jnp.where(field_BC_left==2,jnp.array([0,0,0]),
+    field_ghost_cell_L1 = jnp.where(part_BC_left==0,field[-1],
+                          jnp.where(part_BC_left==1,field[0],
+                          jnp.where(part_BC_left==2,jnp.array([0,0,0]),
                                     jnp.array([0,0,0]))))
     
-    field_ghost_cell_R = jnp.where(field_BC_right==0,field[0],
-                         jnp.where(field_BC_right==1,field[-1],
-                         jnp.where(field_BC_right==2,jnp.array([0,0,0]),
+    field_ghost_cell_R = jnp.where(part_BC_right==0,field[0],
+                         jnp.where(part_BC_right==1,field[-1],
+                         jnp.where(part_BC_right==2,jnp.array([0,0,0]),
                                    jnp.array([0,0,0]))))
 
-    return field_ghost_cell_L1, field_ghost_cell_L2, field_ghost_cell_R
+    return field_ghost_cell_L2, field_ghost_cell_L1, field_ghost_cell_R
 
 def chargedens_BCs(part_BC_left,part_BC_right,x,dx,grid,q):
     rem_charge_left = (q/dx)*jnp.where(abs(x-grid[0])<=dx/2,0.5*(0.5+(grid[0]-x)/dx)**2,0)

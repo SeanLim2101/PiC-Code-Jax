@@ -12,7 +12,7 @@ import csv
 from particle_mover import get_fields_at_x,boris_step
 from EM_solver import field_update1,field_update2
 from particles_to_grid import find_j,find_chargedens_grid
-from diagnostics import get_system_ke,get_E_energy,get_B_energy,Ts_in_cells
+from diagnostics import get_system_ke,get_E_energy,get_B_energy,Ts_in_cells,histogram_velocities
 from boundary_conditions import set_BCs_all,set_BCs_all_midsteps,remove_particles
 
 #Cycle
@@ -80,7 +80,7 @@ def n_cycles(n,xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n,
 def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
                part_BC_left,part_BC_right,field_BC_left,field_BC_right,
                laser_mag = 0, laser_k = 0,
-               write_to_file = False):
+               write_to_file = False, path_to_file = ''):
     #Unpack ICs
     box_size_x=ICs[0][0]
     box_size_y=ICs[0][1]
@@ -91,9 +91,15 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
     qs=ICs[1][2]
     ms=ICs[1][3]
     q_ms=ICs[1][4]
-    no_pseudo_species1 = ICs[1][5]
-    species1_index = [0,no_pseudo_species1]
-    species2_index = [no_pseudo_species1+1,no_pseudo_species1*2]
+    no_each_pseudospecies = ICs[1][5]
+    pseudospecies_indices = []
+    for i,no_pseudospecies in enumerate(no_each_pseudospecies):
+        if i == 0:
+            zeroth_pseudospecies_indices = [0,no_pseudospecies]
+            pseudospecies_indices.append(zeroth_pseudospecies_indices)
+        if i>0:
+            ith_pseudospecies_indices = [pseudospecies_indices[i-1][1]+1,pseudospecies_indices[i-1][1]+no_pseudospecies]
+            pseudospecies_indices.append(ith_pseudospecies_indices)
     weight = ICs[1][6]
     
     E_fields = ICs[2][0]
@@ -107,6 +113,7 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
     xs_nplushalf,vs_n,qs,ms,q_ms = jax.block_until_ready(set_BCs_all(xs_n+(dt/2)*vs_n,vs_n,qs,ms,q_ms,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right))
     xs_nminushalf = jax.block_until_ready(set_BCs_all_midsteps(xs_n-(dt/2)*vs_n,qs,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right))
     
+    
     if write_to_file == True:
         
         cell_headers = []
@@ -116,18 +123,29 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
         datafile_names = ['time.csv','kinetic_energy.csv',
                           'E_x.csv','E_y.csv','E_z.csv','E_energy_densities.csv',
                           'B_x.csv','B_y.csv','B_z.csv','B_energy_densities.csv',
-                          'chargedens.csv',
-                          'species1_no_densities.csv','species2_no_densities.csv',
-                          'species1_temp.csv','species2_temp.csv']
+                          'chargedens.csv']
+            
         datafile_headers = [['t/s'],['kinetic energy/J'],
                             cell_headers,cell_headers,cell_headers,cell_headers,
                             cell_headers,cell_headers,cell_headers,cell_headers,
-                            cell_headers,
-                            cell_headers,cell_headers,
-                            cell_headers,cell_headers]
+                            cell_headers]
+        
+        v_rms0_species = []
+        for i,ith_pseudospecies_indices in enumerate(pseudospecies_indices):
+            datafile_names.append('species'+str(i)+'_no_densities.csv')
+            datafile_headers.append(cell_headers)
+            
+            datafile_names.append('species'+str(i)+'_temp.csv')
+            datafile_headers.append(cell_headers)
+            
+            datafile_names.append('species'+str(i)+'_v_dist.csv')
+            vs_sq = vmap(jnp.dot)(vs_n[ith_pseudospecies_indices[0]:ith_pseudospecies_indices[1]],vs_n[ith_pseudospecies_indices[0]:ith_pseudospecies_indices[1]])
+            v_rms = jnp.sqrt(jnp.sum(vs_sq)/(ith_pseudospecies_indices[1]-ith_pseudospecies_indices[0]))
+            v_rms0_species.append(v_rms)
+            datafile_headers.append(jnp.linspace(-3*v_rms,3*v_rms,30))
         
         for i,file in enumerate(datafile_names):
-            with open(file,'w') as f:
+            with open(path_to_file+file,'w') as f:
                 writer = csv.writer(f)
                 writer.writerow(datafile_headers[i])
                 
@@ -136,7 +154,6 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
         ke_over_time = []
         xs_over_time = []
         vs_over_time = []
-        #js_over_time = []
         E_fields_over_time = []
         E_field_energy = []
         B_fields_over_time = []
@@ -162,40 +179,38 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
         
         #Get data
         chargedens_n = jax.block_until_ready(find_chargedens_grid(xs_n,qs,dx,grid,part_BC_left,part_BC_right))
-        n1_t = jnp.histogram(xs_n[species1_index[0]:species1_index[1],0],
-                             bins=jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1))[0]
-        n2_t = jnp.histogram(xs_n[species2_index[0]:species2_index[1],0],
-                             bins=jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1))[0]
-        species1_temps = jax.block_until_ready(Ts_in_cells(xs_n,vs_n,ms,weight,
-                                                           species1_index[0],species1_index[1],dx,grid,grid_start))
-        species2_temps = jax.block_until_ready(Ts_in_cells(xs_n,vs_n,ms,weight,
-                                                           species2_index[0],species2_index[1],dx,grid,grid_start))
-        #j = jax.block_until_ready(find_j(xs_nminushalf,xs_n,xs_nplushalf,vs_n,qs,dx,dt,grid,grid_start,BC_left,BC_right))
         
         datas = [[t],[jax.block_until_ready(get_system_ke(vs_n,ms))],
                  E_fields[:,0],E_fields[:,1],E_fields[:,2],jax.block_until_ready(get_E_energy(E_fields,dx)),
                  B_fields[:,0],B_fields[:,1],B_fields[:,2],jax.block_until_ready(get_B_energy(B_fields,dx)),
-                 chargedens_n,
-                 n1_t,n2_t,
-                 species1_temps,species2_temps]
+                 chargedens_n]
+        
+        for i, indices in enumerate(pseudospecies_indices):
+            ni_t = jnp.histogram(xs_n[indices[0]:indices[1],0],
+                                 bins=jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1))[0]
+            species_i_temp = jax.block_until_ready(Ts_in_cells(xs_n,vs_n,ms,weight,
+                                                               indices[0],indices[1],dx,grid,grid_start))
+            species_i_velocities =  jax.block_until_ready(histogram_velocities(vs_n,indices[0],indices[1],v_rms0_species[i]))
+            datas.append(ni_t)
+            datas.append(species_i_temp)
+            datas.append(species_i_velocities)
         
         if write_to_file == True:
             for i,data in enumerate(datas):
-                with open(datafile_names[i],'a') as f:
+                with open(path_to_file+datafile_names[i],'a') as f:
                     writer = csv.writer(f)
                     writer.writerow(data)
 
         elif write_to_file == False:
             ts.append(datas[0][0])
             ke_over_time.append(datas[1][0])
-            xs_over_time.append(xs_nplushalf)
+            xs_over_time.append(xs_n)
             vs_over_time.append(vs_n)
             E_fields_over_time.append(E_fields)
             E_field_energy.append(datas[5])
             B_fields_over_time.append(B_fields)
             B_field_energy.append(datas[9])
-            chargedens_over_time.append(datas[10])  
-            #js_over_time.append(datas[11])   
+            chargedens_over_time.append(datas[10])
             Ts_over_time.append((datas[12],datas[13]))
     
     if write_to_file == False:
@@ -208,6 +223,5 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
                 'B-fields':B_fields_over_time,
                 'B-field Energy':B_field_energy,
                 'Charge Densities':chargedens_over_time,
-                #'Current Densities':js_over_time,
                 'Temperature':Ts_over_time,
                 }

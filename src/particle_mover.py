@@ -13,8 +13,8 @@ from boundary_conditions import field_2_ghost_cells
 
 "Field-to-particle function"
 
-def get_fields_at_x(x_n,field,dx,grid,grid_start,BC_left,BC_right):
-    ghost_cell_L1, ghost_cell_L2, ghost_cell_R = field_2_ghost_cells(BC_left,BC_right,field)
+def get_fields_at_x(x_n,field,dx,grid,grid_start,part_BC_left,part_BC_right):
+    ghost_cell_L1, ghost_cell_L2, ghost_cell_R = field_2_ghost_cells(part_BC_left,part_BC_right,field)
     field = jnp.insert(field,0,ghost_cell_L1,axis=0)
     field = jnp.insert(field,0,ghost_cell_L2,axis=0)
     field = jnp.append(field,jnp.array([ghost_cell_R]),axis=0)

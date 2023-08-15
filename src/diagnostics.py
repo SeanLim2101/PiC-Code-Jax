@@ -9,6 +9,7 @@ Created on Fri Aug  4 12:55:57 2023
 from jax import vmap,jit
 import jax
 import jax.numpy as jnp
+from functools import partial
 
 @jit
 def get_system_ke(vs,ms):
@@ -25,7 +26,7 @@ def get_E_energy(E_fields,dx):
 
 @jit
 def get_B_energy(B_fields,dx):
-    return 0.5*vmap(jnp.dot)(B_fields,B_fields)/(4e-7*jnp.pi)/dx
+    return 0.5*vmap(jnp.dot)(B_fields,B_fields)/(4e-7*jnp.pi*dx)
 
 @jit
 def Ts_in_cells(xs_n,vs_n,ms,weight,species_start,species_end,dx,grid,grid_start):
@@ -58,3 +59,18 @@ def Ts_in_cells(xs_n,vs_n,ms,weight,species_start,species_end,dx,grid,grid_start
     Ts=vmap(jnp.divide)(Ts,parts_per_cell)
     
     return Ts
+
+@partial(jit,static_argnums = (1,2))
+def histogram_velocities(vs_n,species_start,species_end,v0):
+    bins = jnp.linspace(-3*v0,3*v0,30)
+    hist_vals = jnp.histogram(vs_n[species_start:species_end,0],bins)[0]
+    return hist_vals
+
+def get_fourier_transform(no_dens,grid,t):
+    nhat = jnp.fft.fft2(no_dens)
+    nhat = jnp.fft.fftshift(nhat)
+    ks = 2*jnp.pi*jnp.fft.fftfreq(len(grid),grid[1]-grid[0])
+    ks = jnp.fft.fftshift(ks)
+    ws = 2*jnp.pi*jnp.fft.fftfreq(len(t),t[1]-t[0])
+    ws = jnp.fft.fftshift(ws)
+    return nhat, ks, ws
