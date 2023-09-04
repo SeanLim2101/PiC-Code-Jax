@@ -65,10 +65,10 @@ The core of the simulation consists of four parts:
 </ol>
 
 The schematic of one cycle of the simulation is shown:
-![diagram of one cycle of the simulation](Images/cycle.png)
+![diagram of one cycle of the simulation](./Images/cycle.png)
 
 The Equations to be solved are:
-![equations to solve](Images/eqns_to_solve.png)
+![equations to solve](./Images/eqns_to_solve.png)
 
 ### 1. The Particle Pusher
 The particle pusher functions are contained in the particle_mover.py module.
@@ -85,21 +85,22 @@ To solve the second equation, if $A=A\times B + C$, then $A=\frac{C+C\times B+(B
 These functions are contained in the particles_to_grid.py module.
 
 Particles are taken as pseudoparticles with a weight $\Omega$ such that number density $n=\frac{N_{p}\Omega}{L}$ where $N_{p}$ is the number of pseudoparticles. This is in agreement with the 1D grid, where $\Omega$ carries an 'areal weight' on top of a normal weight (units of no. of actual particles/ $m^2$ ). The pseudoparticles have a triangular shape function of width $2\Delta x$, as used in EPOCH [3]. This smooths out the properties on the grid to reduce numerical noise.
-![shape function of particles](Images/shapefunction.png). Thus when copying particle charges onto the grid, the charge density is
-$$\frac{q}{\Delta x}\begin{cases}
+![shape function of particles](./Images/shapefunction.png). Thus when copying particle charges onto the grid, the charge density is
+$$\frac{q}{\Delta x}
+\begin{cases}
 \frac{3}{4}-\frac{(X-x_i)^2}{\Delta x^2} &|X-x_i|\leq\frac{\Delta x}{2} (left and right sides of particle)\\
 \frac{1}{2}\left(\frac{3}{2}-\frac{|X-x_i|}{\Delta x}\right)^2 &\frac{\Delta x}{2}\leq|X-x_i|\leq\frac{3\Delta x}{2} (centre of particle) \\
 0 & \frac{\Delta x}{2}\geq|X-x_i|
 \end{cases}$$.
 
 The current density is found using the equation $\frac{\partial j}{\partial x} = -\frac{\partial\rho}{\partial t}$, as in Villasenor and Buneman [4] and EPOCH [5]. This is done by sweeping the grid from left to right. In one timestep, each particle can travel at most 1 cell (since the simulation becomes unstable as $\frac{dx}{dt}\to3\times10^8$), so with the shape function, we only need to sweep between -3 to 2 spaces from the particle's initial cell, where the first cell is empty as the starting point for the sweeping.
-![current sweeping method](Images/current_sweep.png)
+![current sweeping method](./Images/current_sweep.png)
 
-The current in y and z direction use $j=nqv$, or more precisely $j=\frac{N_p\rho v}$.
+The current in y and z direction use $j=nqv$, or more precisely $j=N_p\rho v$.
 
 ### 3. The EM solver
 The EM solver is contained in the EM_solver.py module.A staggered Yee grid is used, where E-fields are defined on right-side cell edges and B-fields are defined on cell centres. 
-![yee grid](Images/yee_grid.png)
+![yee grid](./Images/yee_grid.png)
 
 The equations to solve are $Ampere$ and $Faraday$. We do not solve Gauss' Law directly, as Poisson solvers can lead to numerical issues, and Gauss' Law is automatically obeyed if we use the charge conservation equation, provided Gauss' Law was satisfied at the start.
 
@@ -122,12 +123,12 @@ Boundary conditions are also specified to find charge densities based on chosen 
 
 The code supports 3 particle BC modes, and 3 field BC modes, to be specified on each side. They are displayed in this table :
 Particle table:
-![table of particle BC modes](Images/part_BC_table.png)
+![table of particle BC modes](./Images/part_BC_table.png)
 Note the need to use 2 ghost cells on the left due to the leftmost edges of particles in the first half cell undefined when using the staggered grid  while finding E-field experienced.
 Note y and z BCs are always periodic.
 
 Field table:
-![table of field BC modes](Images/field_BC_table.png)
+![table of field BC modes](./Images/field_BC_table.png)
 
 ### Diagnostics
 Apart from the core solver, there is an additional diagnostics.py module for returning useful output. In it are functions to find the system's total kinetic energy, E-field density, B-field density, temperature at each cell and velocity histogram. These are returned in the output.
