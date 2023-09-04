@@ -79,27 +79,32 @@ $$\frac{v^+-v^-}{\Delta t}=\frac{q}{2m}(v^++v^-)\times B_t$$
 $$v_{t+\Delta t}=v^++\frac{q}{m}E_t\frac{\Delta t}{2}$$
 This was taken from [1].
 
-To solve the second equation, if $A=A\times B + C$, then $A=\frac{C+C\times B+(B\cdot C)B}{1+B\cdot B}$ [2]. Applying this to our equations gives us $B=\frac{q\Delta t}{2m}B_t$ and $C=v^-+\frac{q\Delta t}{2m}(v^-\times B_t)$.
+To solve the second equation, if $P=P\times Q + R$, then $P=\frac{R+R\times Q+(Q\cdot R)Q}{1+Q\cdot Q}$ [2]. Applying this to our equations gives us $Q=\frac{q\Delta t}{2m}B_t$ and $R=v^-+\frac{q\Delta t}{2m}(v^-\times B_t)$.
 
 ### 2. Particles to Grid
 These functions are contained in the particles_to_grid.py module.
 
 Particles are taken as pseudoparticles with a weight $\Omega$ such that number density $n=\frac{N_{p}\Omega}{L}$ where $N_{p}$ is the number of pseudoparticles. This is in agreement with the 1D grid, where $\Omega$ carries an 'areal weight' on top of a normal weight (units of no. of actual particles/ $m^2$ ). The pseudoparticles have a triangular shape function of width $2\Delta x$, as used in EPOCH [3]. This smooths out the properties on the grid to reduce numerical noise.
-![shape function of particles](Images/shapefunction.png). Thus when copying particle charges onto the grid, the charge density is:
 
--For $|X-x_i|\leq\frac{\Delta x}{2}$ (left and right sides of particle), $\rho=\frac{q}{\Delta x}\frac{3}{4}-\frac{(X-x_i)^2}{\Delta x^2}$.
+![shape function of particles](Images/shapefunction.png). 
 
--For $\frac{\Delta x}{2}\leq|X-x_i|\leq\frac{3\Delta x}{2}$ (centre of particle), $\rho = \frac{1}{2}\left(\frac{3}{2}-\frac{|X-x_i|}{\Delta x}\right)^2$.
+Thus when copying particle charges onto the grid, the charge density is:
+
+-For $|X-x_i|\leq\frac{\Delta x}{2}$ (left and right sides of particle), $\rho=\frac{q}{\Delta x}\left(\frac{3}{4}-\frac{(X-x_i)^2}{\Delta x^2}\right)$.
+
+-For $\frac{\Delta x}{2}\leq|X-x_i|\leq\frac{3\Delta x}{2}$ (centre of particle), $\rho = \frac{q}{2\Delta x}\left(\frac{3}{2}-\frac{|X-x_i|}{\Delta x}\right)^2$.
 
 -For $\frac{3\Delta x}{2}\geq|X-x_i|$ (outside $2\Delta x$), $\rho=0$.
 
 The current density is found using the equation $\frac{\partial j}{\partial x} = -\frac{\partial\rho}{\partial t}$, as in Villasenor and Buneman [4] and EPOCH [5]. This is done by sweeping the grid from left to right. In one timestep, each particle can travel at most 1 cell (since the simulation becomes unstable as $\frac{dx}{dt}\to3\times10^8$), so with the shape function, we only need to sweep between -3 to 2 spaces from the particle's initial cell, where the first cell is empty as the starting point for the sweeping.
+
 ![current sweeping method](Images/current_sweep.png)
 
 The current in y and z direction use $j=nqv$, or more precisely $j=N_p\rho v$.
 
 ### 3. The EM solver
 The EM solver is contained in the EM_solver.py module.A staggered Yee grid is used, where E-fields are defined on right-side cell edges and B-fields are defined on cell centres. 
+
 ![yee grid](Images/yee_grid.png)
 
 The equations to solve are $Ampere$ and $Faraday$. We do not solve Gauss' Law directly, as Poisson solvers can lead to numerical issues, and Gauss' Law is automatically obeyed if we use the charge conservation equation, provided Gauss' Law was satisfied at the start.
