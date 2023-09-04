@@ -17,16 +17,16 @@ For N particles and M cells,
         <li>box_size contains ($L_x,L_y,L_z$). </li>
         <li>particle_parameters contains (particle positions, velocities, qs, ms, q/ms, number of each pseudospecies, weights).
           <ol>
-            <li>Particle positions and velocities should both be an Nx3 array.</li>
-            <li>Qs,ms and q/ms should all be Nx1 arrays. Note it has to be Nx1 and not N to be compatible with JAX's vmap function. Also note the use of q/m to reduce floating point errors as JAX is single-precision.</li>
+            <li>Particle positions and velocities should both be an $N\times3$ array.</li>
+            <li>Qs,ms and q/ms should all be Nx1 arrays. Note it has to be $N\times1$ and not $N$ to be compatible with JAX's vmap function. Also note the use of $\frac{q}{m}$ to reduce floating point errors as JAX is single-precision.</li>
             <li>number of each pseudospecies should be an iterable of the number of each pseudospecies, e.g. if I had 5000 electrons and 1000 protons, it would be (5000,1000)</li>
             <li>weights should be an integer/float
           </ol>
         </li>
-        <li> fields contains (array of E-fields,array of B-fields) where both are Mx3 arrays specifying initial E- and B- fields. In EM_solver.py there is a function, find_E0_by_matrix to help check if the initial conditions are correct (this may provide the wrong answer by a constant, hence it is recommended to manually calculate the E-field values). </li>
+        <li> fields contains (array of E-fields,array of B-fields) where both are $M\times3$ arrays specifying initial E- and B- fields. In EM_solver.py there is a function, find_E0_by_matrix to help check if the initial conditions are correct (this may provide the wrong answer by a constant, hence it is recommended to manually calculate the E-field values). </li>
       </ol>
     </li>
-    <li>ext_fields contains (array of E-fields,array of B-fields) where both are Mx3 arrays specifying external E- and B- fields.
+    <li>ext_fields contains (array of E-fields,array of B-fields) where both are $M\times3$ arrays specifying external E- and B- fields.
 
 Note the staggered grid when dealing with E-fields, which are defined on the edges of cells.
 
@@ -65,10 +65,10 @@ The core of the simulation consists of four parts:
 </ol>
 
 The schematic of one cycle of the simulation is shown:
-![diagram of one cycle of the simulation](./Images/cycle.png)
+![diagram of one cycle of the simulation](Images/cycle.png)
 
 The Equations to be solved are:
-![equations to solve](./Images/eqns_to_solve.png)
+![equations to solve](Images/eqns_to_solve.png)
 
 ### 1. The Particle Pusher
 The particle pusher functions are contained in the particle_mover.py module.
@@ -79,28 +79,33 @@ $$\frac{v^+-v^-}{\Delta t}=\frac{q}{2m}(v^++v^-)\times B_t$$
 $$v_{t+\Delta t}=v^++\frac{q}{m}E_t\frac{\Delta t}{2}$$
 This was taken from [1].
 
-To solve the second equation, if $A=A\times B + C$, then $A=\frac{C+C\times B+(B\cdot C)B}{1+B\cdot B}$ [2]. Applying this to our equations gives us $B=\frac{q\Delta t}{2m}B_t$ and $C=v^-+\frac{q\Delta t}{2m}(v^-\times B_t)$.
+To solve the second equation, if $P=P\times Q + R$, then $P=\frac{R+R\times Q+(Q\cdot R)Q}{1+Q\cdot Q}$ [2]. Applying this to our equations gives us $Q=\frac{q\Delta t}{2m}B_t$ and $R=v^-+\frac{q\Delta t}{2m}(v^-\times B_t)$.
 
 ### 2. Particles to Grid
 These functions are contained in the particles_to_grid.py module.
 
 Particles are taken as pseudoparticles with a weight $\Omega$ such that number density $n=\frac{N_{p}\Omega}{L}$ where $N_{p}$ is the number of pseudoparticles. This is in agreement with the 1D grid, where $\Omega$ carries an 'areal weight' on top of a normal weight (units of no. of actual particles/ $m^2$ ). The pseudoparticles have a triangular shape function of width $2\Delta x$, as used in EPOCH [3]. This smooths out the properties on the grid to reduce numerical noise.
-![shape function of particles](./Images/shapefunction.png). Thus when copying particle charges onto the grid, the charge density is
-$$\frac{q}{\Delta x}
-\begin{cases}
-\frac{3}{4}-\frac{(X-x_i)^2}{\Delta x^2} &|X-x_i|\leq\frac{\Delta x}{2} (left and right sides of particle)\\
-\frac{1}{2}\left(\frac{3}{2}-\frac{|X-x_i|}{\Delta x}\right)^2 &\frac{\Delta x}{2}\leq|X-x_i|\leq\frac{3\Delta x}{2} (centre of particle) \\
-0 & \frac{\Delta x}{2}\geq|X-x_i|
-\end{cases}$$.
+
+![shape function of particles](Images/shapefunction.png). 
+
+Thus when copying particle charges onto the grid, the charge density is:
+
+-For $|X-x_i|\leq\frac{\Delta x}{2}$ (left and right sides of particle), $\rho=\frac{q}{\Delta x}\left(\frac{3}{4}-\frac{(X-x_i)^2}{\Delta x^2}\right)$.
+
+-For $\frac{\Delta x}{2}\leq|X-x_i|\leq\frac{3\Delta x}{2}$ (centre of particle), $\rho = \frac{q}{2\Delta x}\left(\frac{3}{2}-\frac{|X-x_i|}{\Delta x}\right)^2$.
+
+-For $\frac{3\Delta x}{2}\geq|X-x_i|$ (outside $2\Delta x$), $\rho=0$.
 
 The current density is found using the equation $\frac{\partial j}{\partial x} = -\frac{\partial\rho}{\partial t}$, as in Villasenor and Buneman [4] and EPOCH [5]. This is done by sweeping the grid from left to right. In one timestep, each particle can travel at most 1 cell (since the simulation becomes unstable as $\frac{dx}{dt}\to3\times10^8$), so with the shape function, we only need to sweep between -3 to 2 spaces from the particle's initial cell, where the first cell is empty as the starting point for the sweeping.
-![current sweeping method](./Images/current_sweep.png)
+
+![current sweeping method](Images/current_sweep.png)
 
 The current in y and z direction use $j=nqv$, or more precisely $j=N_p\rho v$.
 
 ### 3. The EM solver
 The EM solver is contained in the EM_solver.py module.A staggered Yee grid is used, where E-fields are defined on right-side cell edges and B-fields are defined on cell centres. 
-![yee grid](./Images/yee_grid.png)
+
+![yee grid](Images/yee_grid.png)
 
 The equations to solve are $Ampere$ and $Faraday$. We do not solve Gauss' Law directly, as Poisson solvers can lead to numerical issues, and Gauss' Law is automatically obeyed if we use the charge conservation equation, provided Gauss' Law was satisfied at the start.
 
@@ -123,25 +128,45 @@ Boundary conditions are also specified to find charge densities based on chosen 
 
 The code supports 3 particle BC modes, and 3 field BC modes, to be specified on each side. They are displayed in this table :
 Particle table:
-![table of particle BC modes](./Images/part_BC_table.png)
+
+| Mode | BC | Particle position, where L/R is left/right x-position of box	| Particle velocity |	Force experienced by particle in ghost cell GL1/L2/R
+|---|---|---|---|---|
+| 0 | Periodic | Move particle back to other side of box. This is done with the modulo function. When particle escapes to the right, x’ = (x-R)%(length of box)+L. When particle escapes to the left, x’ = (x-R)%(length of box)-L. | No change. | GL1 = 2nd last cell
+GL2 = Last cell
+GR = First cell |
+| 1 | Reflective | Move particle back the excess distance. When particle escapes to the right, x’ = R-(x-R)=2R-x. When particle escapes to the left, x’ = L+(L-x)=2L-x.
+ | Multiply x-component by -1. | GL1 = 2nd cell
+GL2 = First cell
+GR = Last cell |
+| 2 | Destructive | Park particles on either side outside the box. JAX needs fixed array lengths, so removing particles causes it to recompile functions each time and increases the code runtime. 
+
+Arbitrarily set their position outside of the box, currently at L-Δx for the left and R+2.5Δx for the right. (For right edge, even though their cell number exceeds length of field array, python will take the last element of the array. Thus we can minimise numerical issues when the particle is exactly on the right ghost cell. This does not work for the left edge, since the -1th cell is the last cell.) Also set q and q/m to 0 so they do not contribute any charge density/current. | Set to 0. | GL1 = 0
+GL2 = 0
+GR = 0 |
+![table of particle BC modes](Images/part_BC_table.png)
 Note the need to use 2 ghost cells on the left due to the leftmost edges of particles in the first half cell undefined when using the staggered grid  while finding E-field experienced.
 Note y and z BCs are always periodic.
 
 Field table:
-![table of field BC modes](./Images/field_BC_table.png)
+![table of field BC modes](Images/field_BC_table.png)
 
 ### Diagnostics
 Apart from the core solver, there is an additional diagnostics.py module for returning useful output. In it are functions to find the system's total kinetic energy, E-field density, B-field density, temperature at each cell and velocity histogram. These are returned in the output.
 
 ### The simulation.py module
-Finally, the simulation.py module puts it all together. It defines one step in the cycle, which is called in an n_cycles function so we can take many steps before performing diagnosis for long simulations where timescales of phenomenon are much longer than the dt required to maintain stability ($\frac{dx}{dt}<3x10^8$). 
+Finally, the simulation.py module puts it all together. It defines one step in the cycle, which is called in an n_cycles function so we can take many steps before performing diagnosis for long simulations where timescales of phenomenon are much longer than the dt required to maintain stability ($\frac{dx}{dt}<3\times10^8$). 
 
 This outermost function n_cycles, as well as any other outermost functions in the simulation function, are decorated with @jit for jax to compile the function and any other function called inside it, as well as block_until_ready statements placed where necessary to run on GPUs. 
 
 # References
 [1] H. Qin, S. Zhang, J. Xiao, J. Liu, Y. Sun, W. M. Tang (2013, August). "Why is Boris algorithm so good. Physics of Plasmas [Online]. vol. 20, issue 8. Available: https://doi.org/10.1063/1.4818428.
+
 [2] That slideshow griffin gave
+
 [3] C. Brady, K. Bennett, H. Schmitz, C. Ridgers (2021, June). Section 4.3.1 "Particle Shape Functions" in "Developers Manual for the EPOCH PIC Codes." Version 4.17.0. Latest version available: https://github.com/Warwick-Plasma/EPOCH_manuals/releases.
+
 [4] J. Villasenor, O. Buneman (1992, March). "Rigorous charge conservation for local electromagnetic field solvers." Computer Physics Communications [Online]. vol. 69, issues 2–3, pages 306-316. Available: https://doi.org/10.1016/0010-4655(92)90169-Y.
+
 [5] C. Brady, K. Bennett, H. Schmitz, C. Ridgers (2021, June). Section 4.3.2 "Current Calculation" in "Developers Manual for the EPOCH PIC Codes." Version 4.17.0. Latest version available: https://github.com/Warwick-Plasma/EPOCH_manuals/releases.
+
 [6] R. Lehe (2016, June). "Electromagnetic wave propagation in Particle-In-Cell codes." US Particle Accelerator School (USPAS) Summer Session [PowerPoint slides]. slides 18-24. Available: https://people.nscl.msu.edu/~lund/uspas/scs_2016/lec_adv/A1b_EM_Waves.pdf.
