@@ -129,17 +129,24 @@ Boundary conditions are also specified to find charge densities based on chosen 
 The code supports 3 particle BC modes, and 3 field BC modes, to be specified on each side. They are displayed in this table :
 Particle table:
 
-| Mode | BC | Particle position, where L/R is left/right x-position of box	| Particle velocity |	Force experienced by particle in ghost cell GL1/GL2/GR
+| Mode | BC | Particle position, where L/R is left/right x-position of box	| Particle velocity |	Force experienced by particle in ghost cells GL1/GL2/GR|
 |---|---|---|---|---|
 | 0 | Periodic | Move particle back to other side of box. This is done with the modulo function. When particle escapes to the right, x’ = (x-R)%(length of box)+L. When particle escapes to the left, x’ = (x-R)%(length of box)-L. | No change. | GL1 = 2nd last cell </br> GL2 = Last cell </br> GR = First cell |
 | 1 | Reflective | Move particle back the excess distance. When particle escapes to the right, x’ = R-(x-R)=2R-x. When particle escapes to the left, x’ = L+(L-x)=2L-x. | Multiply x-component by -1. | GL1 = 2nd cell </br> GL2 = First cell </br> GR = Last cell |
-| 2 | Destructive | Park particles on either side outside the box. JAX needs fixed array lengths, so removing particles causes it to recompile functions each time and increases the code runtime. Arbitrarily set their position outside of the box, currently at L-Δx for the left and R+2.5Δx for the right. (When calling jnp.arange to produce the grid, the elements towards the end start producing some numerical deviation, parking the particle exactly on the next ghost cell produces some issues. However, python will take the last element of the array even though their cell number exceeds length of field array. Thus we can park the particle a few $\Delta x$'s away.) </br> Also set q and q/m to 0 so they do not contribute any charge density/current. | Set to 0. | GL1 = 0 </br> GL2 = 0 </br> GR = 0 |
+| 2 | Destructive | Park particles on either side outside the box. JAX needs fixed array lengths, so removing particles causes it to recompile functions each time and increases the code runtime. </br> Arbitrarily set their position outside of the box, currently at L-Δx for the left and R+2.5Δx for the right. (When calling jnp.arange to produce the grid, the elements towards the end start producing some numerical deviation, parking the particle exactly on the next ghost cell produces some issues. However, python will take the last element of the array even though their cell number exceeds length of field array. Thus we can park the particle a few $\Delta x$'s away.) </br> Also set q and q/m to 0 so they do not contribute any charge density/current. | Set to 0. | GL1 = 0 </br> GL2 = 0 </br> GR = 0 |
 
 ![table of particle BC modes](Images/part_BC_table.png)
 Note the need to use 2 ghost cells on the left due to the leftmost edges of particles in the first half cell undefined when using the staggered grid  while finding E-field experienced.
 Note y and z BCs are always periodic.
 
 Field table:
+
+| Mode | BC | Ghost cells GL/GR|
+|---|---|---|
+| 0 | Periodic | GL = Last cell </br> GR = First cell |
+| 1 | Reflective | GL = First cell </br> GR = Last cell |
+| 2 | Transmissive | Silver-Mueller BCs [5]. By applying conditions for a left-propagating wave for the left cell (E_y=-cB_z,E_z=cB_y) and a right-propagating wave for the right (E_y=cB_z,E_z=-cB_y),  and with a simple averaging to account for the staggering, we get: </br> $E_{yL}=-E_{y0}-2cB_{z0}$ </br> $E_{zL}=-E_{z0}+2cB_{y0}$ </br> $B_{yL}=3B_{y0}-\frac{2}{c}E_{z0}$ </br> $B_{zL}=3B_{z0}+\frac{2}{c}E_{y0}$ </br> </br> $E_{yR}=3E_{y,-1}-2cB_{z,-1}$ </br> $E_{zR}=3E_{z,-1}+2cB_{y,-1}$ </br> $B_{yR}=-B_{y,-1}-\frac{2}{c}E_{z,-1}$ </br> $B_{zR}= -B_{z,-1}+\frac{2}{c}E_{y,-1}$ </br> </br> This gives us a zero-order approximation for transmissive BCs. |
+| 3 | Laser | For laser amplitude A and wavenumber k defined at the start, </br> $E_{yL}=Asin(kct)$ </br> $B_{zL}=\frac{A}{c} sin(kct)$ </br> $E_{yR}=Asin(kct)$ </br> $B_{zR}=-\frac{A}{c} sin(kct)$ |
 ![table of field BC modes](Images/field_BC_table.png)
 
 ### Diagnostics
