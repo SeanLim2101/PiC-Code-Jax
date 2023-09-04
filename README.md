@@ -68,7 +68,7 @@ The schematic of one cycle of the simulation is shown:
 ![diagram of one cycle of the simulation](/Images/cycle.png)
 
 The Equations to be solved are:
-![equations to solve](\Images\eqns_to_solve.png)
+![equations to solve](/Images/eqns_to_solve.png)
 
 ### 1. The Particle Pusher
 The particle pusher functions are contained in the particle_mover.py module.
@@ -93,7 +93,7 @@ $$\frac{q}{\Delta x}\begin{cases}
 \end{cases}$$.
 
 The current density is found using the equation $\frac{\partial j}{\partial x} = -\frac{\partial\rho}{\partial t}$, as in Villasenor and Buneman [4] and EPOCH [5]. This is done by sweeping the grid from left to right. In one timestep, each particle can travel at most 1 cell (since the simulation becomes unstable as $\frac{dx}{dt}\to3\times10^8$), so with the shape function, we only need to sweep between -3 to 2 spaces from the particle's initial cell, where the first cell is empty as the starting point for the sweeping.
-![current sweeping method](/images/current_sweep.png)
+![current sweeping method](/Images/current_sweep.png)
 
 The current in y and z direction use $j=nqv$, or more precisely $j=\frac{N_p\rho v}$.
 
@@ -127,7 +127,7 @@ Note the need to use 2 ghost cells on the left due to the leftmost edges of part
 Note y and z BCs are always periodic.
 
 Field table:
-![table of field BC modes](Images/field_BC_table.png)
+![table of field BC modes](/Images/field_BC_table.png)
 
 ### Diagnostics
 Apart from the core solver, there is an additional diagnostics.py module for returning useful output. In it are functions to find the system's total kinetic energy, E-field density, B-field density, temperature at each cell and velocity histogram. These are returned in the output.

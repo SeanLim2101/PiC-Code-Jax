@@ -43,7 +43,7 @@ def field_ghost_cells_B(field_BC_left,field_BC_right,B_field,E_field,dx,current_
     field_ghost_cell_R = jnp.where(field_BC_right==0,B_field[0],
                          jnp.where(field_BC_right==1,B_field[-1],
                          jnp.where(field_BC_right==2,jnp.array([0,-(2/3e8)*E_field[-1,2]-B_field[-1,1],(2/3e8)*E_field[-1,1]-B_field[-1,2]]),
-                         jnp.where(field_BC_right==3,jnp.array([0,0,B0*jnp.sin(3e8*k*current_t)]),
+                         jnp.where(field_BC_right==3,jnp.array([0,0,-B0*jnp.sin(3e8*k*current_t)]),
                                    jnp.array([0,0,0])))))
     return field_ghost_cell_L, field_ghost_cell_R
 

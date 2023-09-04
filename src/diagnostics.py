@@ -61,10 +61,12 @@ def Ts_in_cells(xs_n,vs_n,ms,weight,species_start,species_end,dx,grid,grid_start
     return Ts
 
 @partial(jit,static_argnums = (1,2))
-def histogram_velocities(vs_n,species_start,species_end,v0):
-    bins = jnp.linspace(-3*v0,3*v0,30)
+def histogram_velocities_x(vs_n,species_start,species_end):
+    vs_sq = vmap(jnp.dot)(vs_n[species_start:species_end,0],vs_n[species_start:species_end,0])
+    v_rms = jnp.sqrt(jnp.sum(vs_sq)/(species_end-species_start))
+    bins = jnp.linspace(-3*v_rms,3*v_rms,31)
     hist_vals = jnp.histogram(vs_n[species_start:species_end,0],bins)[0]
-    return hist_vals
+    return v_rms, hist_vals
 
 def get_fourier_transform(no_dens,grid,t):
     nhat = jnp.fft.fft2(no_dens)

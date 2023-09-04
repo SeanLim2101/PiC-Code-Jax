@@ -12,7 +12,7 @@ import csv
 from particle_mover import get_fields_at_x,boris_step
 from EM_solver import field_update1,field_update2
 from particles_to_grid import find_j,find_chargedens_grid
-from diagnostics import get_system_ke,get_E_energy,get_B_energy,Ts_in_cells,histogram_velocities
+from diagnostics import get_system_ke,get_E_energy,get_B_energy,Ts_in_cells,histogram_velocities_x
 from boundary_conditions import set_BCs_all,set_BCs_all_midsteps,remove_particles
 
 #Cycle
@@ -78,7 +78,7 @@ def n_cycles(n,xs_nplushalf,vs_n,E_fields,B_fields,xs_nminushalf,xs_n,
     return params_iplusn[0],params_iplusn[1],params_iplusn[2],params_iplusn[3],params_iplusn[4],params_iplusn[5],params_iplusn[6],params_iplusn[7],params_iplusn[8],params_iplusn[9]
 
 def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
-               part_BC_left,part_BC_right,field_BC_left,field_BC_right,
+               BCs,
                laser_mag = 0, laser_k = 0,
                write_to_file = False, path_to_file = ''):
     #Unpack ICs
@@ -110,6 +110,11 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
     grid_start = grid[0]-dx/2
     staggered_grid = grid + dx/2
     
+    part_BC_left = BCs[0]
+    part_BC_right = BCs[1]
+    field_BC_left = BCs[2]
+    field_BC_right = BCs[3]
+    
     xs_nplushalf,vs_n,qs,ms,q_ms = jax.block_until_ready(set_BCs_all(xs_n+(dt/2)*vs_n,vs_n,qs,ms,q_ms,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right))
     xs_nminushalf = jax.block_until_ready(set_BCs_all_midsteps(xs_n-(dt/2)*vs_n,qs,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right))
     
@@ -130,7 +135,6 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
                             cell_headers,cell_headers,cell_headers,cell_headers,
                             cell_headers]
         
-        v_rms0_species = []
         for i,ith_pseudospecies_indices in enumerate(pseudospecies_indices):
             datafile_names.append('species'+str(i)+'_no_densities.csv')
             datafile_headers.append(cell_headers)
@@ -138,11 +142,13 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
             datafile_names.append('species'+str(i)+'_temp.csv')
             datafile_headers.append(cell_headers)
             
-            datafile_names.append('species'+str(i)+'_v_dist.csv')
-            vs_sq = vmap(jnp.dot)(vs_n[ith_pseudospecies_indices[0]:ith_pseudospecies_indices[1]],vs_n[ith_pseudospecies_indices[0]:ith_pseudospecies_indices[1]])
-            v_rms = jnp.sqrt(jnp.sum(vs_sq)/(ith_pseudospecies_indices[1]-ith_pseudospecies_indices[0]))
-            v_rms0_species.append(v_rms)
-            datafile_headers.append(jnp.linspace(-3*v_rms,3*v_rms,30))
+            datafile_names.append('species'+str(i)+'_vx_dist.csv')
+            v_rms_binedges = jnp.linspace(-3,3,31)
+            v_rms_values = (v_rms_binedges[:-1]+v_rms_binedges[1:])/2
+            header = ['v_rms']
+            for i in v_rms_values:
+                header.append(str(i)+'v_rms')
+            datafile_headers.append(header)
         
         for i,file in enumerate(datafile_names):
             with open(path_to_file+file,'w') as f:
@@ -172,8 +178,8 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
                                                                                        part_BC_left,part_BC_right,field_BC_left,field_BC_right,
                                                                                        laser_mag,laser_k)
         
-        if part_BC_left == 2 or part_BC_right == 2: #Remove particles from simulation, but takes a while to run
-            xs_nplushalf,xs_nminushalf,vs_n,qs,ms,q_ms,xs_n = remove_particles(xs_nplushalf,xs_n,xs_nminushalf,vs_n,qs,ms,q_ms,box_size_x,part_BC_left,part_BC_right)
+        #if part_BC_left == 2 or part_BC_right == 2: #Remove particles from simulation, but takes a while to run
+        #    xs_nplushalf,xs_nminushalf,vs_n,qs,ms,q_ms,xs_n = remove_particles(xs_nplushalf,xs_n,xs_nminushalf,vs_n,qs,ms,q_ms,box_size_x,part_BC_left,part_BC_right)
         
         steps_taken += steps_per_snapshot
         
@@ -190,10 +196,10 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
                                  bins=jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1))[0]
             species_i_temp = jax.block_until_ready(Ts_in_cells(xs_n,vs_n,ms,weight,
                                                                indices[0],indices[1],dx,grid,grid_start))
-            species_i_velocities =  jax.block_until_ready(histogram_velocities(vs_n,indices[0],indices[1],v_rms0_species[i]))
+            v_rms, species_i_velocities =  jax.block_until_ready(histogram_velocities_x(vs_n,indices[0],indices[1]))
             datas.append(ni_t)
             datas.append(species_i_temp)
-            datas.append(species_i_velocities)
+            datas.append(jnp.insert(species_i_velocities,0,v_rms))
         
         if write_to_file == True:
             for i,data in enumerate(datas):
@@ -211,7 +217,7 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
             B_fields_over_time.append(B_fields)
             B_field_energy.append(datas[9])
             chargedens_over_time.append(datas[10])
-            Ts_over_time.append((datas[12],datas[13]))
+            Ts_over_time.append((datas[12],datas[15]))
     
     if write_to_file == False:
         return {'Time':ts,
