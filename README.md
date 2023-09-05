@@ -119,18 +119,20 @@ The schematic of one cycle of the simulation is shown:
 ![diagram of one cycle of the simulation](Images/cycle.png)
 
 The Equations to be solved are:
-<font color='red'>
+<span style="color: red;">
   * $\frac{\partial B}{\partial t} = -\nabla\times E$
   * $\frac{\partial E}{\partial t} = c^2\nabla\times B-\frac{j}{\varepsilon_0}$
-</font>
-<font color='green'>
+</span>
+
+<span style="color: green;">
   * (in $x$) $\nabla j = -\frac{\partial\rho}{\partial t}$
   * (in $y,z$) $j=nqv$
-</font>
-<font color='orange'>
+</span>
+
+<span style="color: orange;">
   * $\frac{dv}{dt}=q(E+v\times B)$
   * $\frac{dx}{dt}=v$
-</font>
+</span>
 
 ![equations to solve](Images/eqns_to_solve.png)
 
