@@ -92,9 +92,10 @@ q_ms = jnp.ones(shape=(no_particles,1))
 E_fields_at_x = jnp.ones(shape=(no_particles,3))
 B_fields_at_x = jnp.ones(shape=(no_particles,3))
 '''
+
 timeit.timeit(stmt='boris_step(dt,xs_nplushalf,vs_n,q_ms,E_fields_at_x,B_fields_at_x)',setup=string,number=100)
 ```
-gave us outputs of 0.47/0.45/0.70/1.95s. Adding the ```@jit``` decorator and replacing the last line with ```python timeit.timeit(stmt='jax.block_until_ready(boris_step(dt,xs_nplushalf,vs_n,q_ms,E_fields_at_x,B_fields_at_x))',setup=string,number=100) ``` gave us 0.0044/0.13/0.20/0.81s.
+gave us outputs of 0.47/0.45/0.70/1.95s. Adding the ```@jit``` decorator and replacing the last line with ```python timeit.timeit(stmt='jax.block_until_ready(boris_step(dt,xs_nplushalf,vs_n,q_ms,E_fields_at_x,B_fields_at_x))',setup=string,number=100)``` gave us 0.0044/0.13/0.20/0.81s.
 
 Some of these speed-ups make it feasible to run our PIC codes on Python to begin with. Thus we have a PIC code which is much more accessible, one which does not require knowledge of old and relatively unknown languages like Fortran. 
 
@@ -120,7 +121,7 @@ The schematic of one cycle of the simulation is shown:
 The Equations to be solved are:
 <font color='red'>
   * $\frac{\partial B}{\partial t} = -\nabla\times E$
-  * $\frac{\partial E}{\partial t} = c^2\nabla\times B-\frac{j}{\varepsilon_0$
+  * $\frac{\partial E}{\partial t} = c^2\nabla\times B-\frac{j}{\varepsilon_0}$
 </font>
 <font color='green'>
   * (in $x$) $\nabla j = -\frac{\partial\rho}{\partial t}$
