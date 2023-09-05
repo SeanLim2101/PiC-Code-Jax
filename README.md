@@ -14,7 +14,7 @@ For N particles and M cells,
 <ol>
     <li>ICs is an initial conditions sequence containing 3 sequences, (box_size, particle_parameters, fields). 
       <ol>
-        <li>box_size contains ($L_x,L_y,L_z$). </li>
+        <li>box_size contains ($L_x,L_y,L_z$), each an integer representing the $x$, $y$ and $z$ dimensions. </li>
         <li>particle_parameters contains (particle positions, velocities, qs, ms, q/ms, number of each pseudospecies, weights).
           <ol>
             <li>Particle positions and velocities should both be an $N\times3$ array.</li>
@@ -30,8 +30,6 @@ For N particles and M cells,
 
 Note the staggered grid when dealing with E-fields, which are defined on the edges of cells.
 
-Some precautions: dx should be on the order of Debye length to avoid numerical heating. Make functions as smooth as possible, eg for EM waves, apply gaussian envelope or ensure no cutoff of EM waves. For particles, ensure left and right side of system match.
-
 BCs is a 4-integer tuple representing (left particle BC, right particle BC, left field BC, right field BC). Particle BCs are 0 for periodic, 1 for reflective and 2 for destructive. Field BCs are 0 for periodic, 1 for reflective, 2 for trasnsmissive and 3 for laser. Detailed information on how these BCs work can be found below.
 
 If 3 for field BCs is selected, the laser magnitude and wavenumber must be specified with the arguments laser_mag and laser_k (both default 0).
@@ -46,11 +44,63 @@ For smaller simulations, the code saves all particle $x$-positions and velocitie
 
 For larger simulations, the $x$-positions are histogrammed by cell and velocities are histogrammed in 30 bins from $-3v_{rms}$ to $3v_{rms}$. The path to save the files can be defined by the path_to_file argument, default in the current working directory. CSV file names are 'time.csv','kinetic_energy.csv','E_x.csv','E_y.csv','E_z.csv','E_energy_densities.csv','B_x.csv','B_y.csv','B_z.csv','B_energy_densities.csv','chargedens.csv'. For each species there will be a 'species_no_densities.csv', 'species_temp.csv' and 'species_vx_dist.csv'.
 
+## Why JAX?
+JAX is a Python module utilising the XLA (accelerated Linear Algebra) compiler to create efficient machine learning code. The github repository can be found <a href='https://github.com/google/jax'>here</a>. So why are we using it to write PIC code? 
 
-## Examples
+1. Given the parallel nature of PIC codes (advancing many particles at once with the same equations of motion), we can use JAX's vmap function to perform calculations vectorially and hence utilise parallel computing on GPUs.
+2. By writing our code in accordance with JAX's restrictions, we can use JAX's jit function to compile code efficiently and get massive speed increases. As a quick test for how much of a speed increase we can get, I ran the current calculation code on 500/5000/50000/500000 particles and 100 grid cells on my local PC.
+After removing the ```@jit``` decorator from our ```find_j``` function,
+```python
+import timeit
 
-In the examples folder there are some example simulations showing typical plasma behaviour. Includes plasma oscillations, plasma waves, plasma waves, 2-stream instability, weibel instability, hybrid oscillations.
+string = '''
+import jax.numpy as jnp
+import jax
+from particles_to_grid import find_j
 
+dx = 1
+dt = dx/(2*3e8)
+grid = jnp.arange(0.5,100.5,dx)
+grid_start = grid[0]-dx/2
+no_particles = 500/5000/50000/500000
+xs_n = jax.random.uniform(jax.random.PRNGKey(100),shape=(no_particles,3),minval=0,maxval=100)
+vs_n = jax.random.normal(jax.random.PRNGKey(100),shape=(no_particles,3))
+xs_nminushalf = xs_n - vs_n*dt/2
+xs_nplushalf = xs_n + vs_n*dt/2
+qs = 1.6e-19*jnp.ones(shape=(no_particles,1))
+'''
+
+timeit.timeit(stmt='find_j(xs_nminushalf,xs_n,xs_nplushalf,vs_n,qs,dx,dt,grid,grid_start,0,0)',setup=string,number=100)
+```
+returns 44.4/44.5/46.6/67.5s.
+
+Adding the ```@jit``` decorator back and add the ```.block_until_ready()``` command behind ```find_j```, with the first 500 particle run taking 0.62s (due to compilation time), the output is now about 0.05/0.97/4.59/40.6s.
+
+As another example, for the boris step with 500/5000/50000/500000 particles,
+```python
+string = '''
+import jax.numpy as jnp
+import jax
+from particle_mover import boris_step
+
+dx = 1
+dt = dx/(2*3e8)
+no_particles = 500/5000/50000/500000
+xs_nplushalf = jax.random.uniform(jax.random.PRNGKey(100),shape=(no_particles,3),minval=0,maxval=100)
+vs_n = jax.random.normal(jax.random.PRNGKey(100),shape=(no_particles,3))
+q_ms = jnp.ones(shape=(no_particles,1))
+E_fields_at_x = jnp.ones(shape=(no_particles,3))
+B_fields_at_x = jnp.ones(shape=(no_particles,3))
+'''
+timeit.timeit(stmt='boris_step(dt,xs_nplushalf,vs_n,q_ms,E_fields_at_x,B_fields_at_x)',setup=string,number=100)
+```
+gave us outputs of 0.47/0.45/0.70/1.95s. Adding the ```@jit``` decorator and replacing the last line with ```python timeit.timeit(stmt='jax.block_until_ready(boris_step(dt,xs_nplushalf,vs_n,q_ms,E_fields_at_x,B_fields_at_x))',setup=string,number=100) ``` gave us 0.0044/0.13/0.20/0.81s.
+
+Some of these speed-ups make it feasible to run our PIC codes on Python to begin with. Thus we have a PIC code which is much more accessible, one which does not require knowledge of old and relatively unknown languages like Fortran. 
+
+This accessibility is what makes the code so useful as even undergraduates can use or develop the code to their needs, on GPUs or on their local PCs, just by getting used to JAX's slightly different syntax. 
+
+The code could even be used as a learning tool to visualise plasma effects in Plasma Physics courses, albeit only 1D effects in its current iteration. Several plasma effects are already shown in the examples folder.
 
 ## Choices Made
 
@@ -68,6 +118,19 @@ The schematic of one cycle of the simulation is shown:
 ![diagram of one cycle of the simulation](Images/cycle.png)
 
 The Equations to be solved are:
+<font color='red'>
+  * $\frac{\partial B}{\partial t} = -\nabla\times E$
+  * $\frac{\partial E}{\partial t} = c^2\nabla\times B-\frac{j}{\varepsilon_0$
+</font>
+<font color='green'>
+  * (in $x$) $\nabla j = -\frac{\partial\rho}{\partial t}$
+  * (in $y,z$) $j=nqv$
+</font>
+<font color='orange'>
+  * $\frac{dv}{dt}=q(E+v\times B)$
+  * $\frac{dx}{dt}=v$
+</font>
+
 ![equations to solve](Images/eqns_to_solve.png)
 
 ### 1. The Particle Pusher
@@ -133,7 +196,7 @@ Particle table:
 |---|---|---|---|---|
 | 0 | Periodic | Move particle back to other side of box. This is done with the modulo function. When particle escapes to the right, x’ = (x-R)%(length of box)+L. When particle escapes to the left, x’ = (x-R)%(length of box)-L. | No change. | GL1 = 2nd last cell </br> GL2 = Last cell </br> GR = First cell |
 | 1 | Reflective | Move particle back the excess distance. When particle escapes to the right, x’ = R-(x-R)=2R-x. When particle escapes to the left, x’ = L+(L-x)=2L-x. | Multiply x-component by -1. | GL1 = 2nd cell </br> GL2 = First cell </br> GR = Last cell |
-| 2 | Destructive | Park particles on either side outside the box. JAX needs fixed array lengths, so removing particles causes it to recompile functions each time and increases the code runtime. </br> Arbitrarily set their position outside of the box, currently at L-Δx for the left and R+2.5Δx for the right. (When calling jnp.arange to produce the grid, the elements towards the end start producing some numerical deviation, parking the particle exactly on the next ghost cell produces some issues. However, python will take the last element of the array even though their cell number exceeds length of field array. Thus we can park the particle a few $\Delta x$'s away.) </br> Also set q and q/m to 0 so they do not contribute any charge density/current. | Set to 0. | GL1 = 0 </br> GL2 = 0 </br> GR = 0 |
+| 2 | Destructive | Park particles on either side outside the box. JAX needs fixed array lengths, so removing particles causes it to recompile functions each time and increases the code runtime. </br></br> Arbitrarily set their position outside of the box, currently at L-Δx for the left and R+2.5Δx for the right. (When calling jnp.arange to produce the grid, the elements towards the end start producing some numerical deviation, parking the particle exactly on the next ghost cell produces some issues. However, when indexing beyond the length of the array, JAX will take the last element of the array. Thus we can park the particle a few $\Delta x$'s away.) </br></br> Also set q and q/m to 0 so they do not contribute any charge density/current. | Set to 0. | GL1 = 0 </br> GL2 = 0 </br> GR = 0 |
 
 ![table of particle BC modes](Images/part_BC_table.png)
 Note the need to use 2 ghost cells on the left due to the leftmost edges of particles in the first half cell undefined when using the staggered grid  while finding E-field experienced.
@@ -145,22 +208,28 @@ Field table:
 |---|---|---|
 | 0 | Periodic | GL = Last cell </br> GR = First cell |
 | 1 | Reflective | GL = First cell </br> GR = Last cell |
-| 2 | Transmissive | Silver-Mueller BCs [5]. By applying conditions for a left-propagating wave for the left cell (E_y=-cB_z,E_z=cB_y) and a right-propagating wave for the right (E_y=cB_z,E_z=-cB_y),  and with a simple averaging to account for the staggering, we get: </br> $E_{yL}=-E_{y0}-2cB_{z0}$ </br> $E_{zL}=-E_{z0}+2cB_{y0}$ </br> $B_{yL}=3B_{y0}-\frac{2}{c}E_{z0}$ </br> $B_{zL}=3B_{z0}+\frac{2}{c}E_{y0}$ </br> </br> $E_{yR}=3E_{y,-1}-2cB_{z,-1}$ </br> $E_{zR}=3E_{z,-1}+2cB_{y,-1}$ </br> $B_{yR}=-B_{y,-1}-\frac{2}{c}E_{z,-1}$ </br> $B_{zR}= -B_{z,-1}+\frac{2}{c}E_{y,-1}$ </br> </br> This gives us a zero-order approximation for transmissive BCs. |
-| 3 | Laser | For laser amplitude A and wavenumber k defined at the start, </br> $E_{yL}=Asin(kct)$ </br> $B_{zL}=\frac{A}{c} sin(kct)$ </br> $E_{yR}=Asin(kct)$ </br> $B_{zR}=-\frac{A}{c} sin(kct)$ |
+| 2 | Transmissive | Silver-Mueller BCs [6]. By applying conditions for a left-propagating wave for the left cell (E_y=-cB_z,E_z=cB_y) and a right-propagating wave for the right (E_y=cB_z,E_z=-cB_y),  and with a simple averaging to account for the staggering, we get: </br></br> $E_{yL}=-E_{y0}-2cB_{z0}$ </br> $E_{zL}=-E_{z0}+2cB_{y0}$ </br> $B_{yL}=3B_{y0}-\frac{2}{c}E_{z0}$ </br> $B_{zL}=3B_{z0}+\frac{2}{c}E_{y0}$ </br> </br> $E_{yR}=3E_{y,-1}-2cB_{z,-1}$ </br> $E_{zR}=3E_{z,-1}+2cB_{y,-1}$ </br> $B_{yR}=-B_{y,-1}-\frac{2}{c}E_{z,-1}$ </br> $B_{zR}= -B_{z,-1}+\frac{2}{c}E_{y,-1}$ </br> </br> This gives us a zero-order approximation for transmissive BCs. |
+| 3 | Laser | For laser amplitude A and wavenumber k defined at the start, </br></br> $E_{yL}=Asin(kct)$ </br> $B_{zL}=\frac{A}{c} sin(kct)$ </br> $E_{yR}=Asin(kct)$ </br> $B_{zR}=-\frac{A}{c} sin(kct)$ |
 ![table of field BC modes](Images/field_BC_table.png)
 
 ### Diagnostics
 Apart from the core solver, there is an additional diagnostics.py module for returning useful output. In it are functions to find the system's total kinetic energy, E-field density, B-field density, temperature at each cell and velocity histogram. These are returned in the output.
+
+Temperature is calculated using $$
 
 ### The simulation.py module
 Finally, the simulation.py module puts it all together. It defines one step in the cycle, which is called in an n_cycles function so we can take many steps before performing diagnosis for long simulations where timescales of phenomenon are much longer than the dt required to maintain stability ($\frac{dx}{dt}<3\times10^8$). 
 
 This outermost function n_cycles, as well as any other outermost functions in the simulation function, are decorated with @jit for jax to compile the function and any other function called inside it, as well as block_until_ready statements placed where necessary to run on GPUs. 
 
+## Examples
+
+In the examples folder there are some example simulations showing typical plasma behaviour. Includes plasma oscillations, plasma waves, 2-stream instability, weibel instability, hybrid oscillations.
+
 # References
 [1] H. Qin, S. Zhang, J. Xiao, J. Liu, Y. Sun, W. M. Tang (2013, August). "Why is Boris algorithm so good. Physics of Plasmas [Online]. vol. 20, issue 8. Available: https://doi.org/10.1063/1.4818428.
 
-[2] That slideshow griffin gave
+[2] A. Hakim (2021). "Computational Methods in Plasma Physics Lecture II." PPPL Graduate Summer School 2021[PowerPoint slides]. slide 19. Available: https://cmpp.readthedocs.io/en/latest/_static/lec2-2021.pdf.
 
 [3] C. Brady, K. Bennett, H. Schmitz, C. Ridgers (2021, June). Section 4.3.1 "Particle Shape Functions" in "Developers Manual for the EPOCH PIC Codes." Version 4.17.0. Latest version available: https://github.com/Warwick-Plasma/EPOCH_manuals/releases.
 
@@ -168,4 +237,4 @@ This outermost function n_cycles, as well as any other outermost functions in th
 
 [5] C. Brady, K. Bennett, H. Schmitz, C. Ridgers (2021, June). Section 4.3.2 "Current Calculation" in "Developers Manual for the EPOCH PIC Codes." Version 4.17.0. Latest version available: https://github.com/Warwick-Plasma/EPOCH_manuals/releases.
 
-[6] R. Lehe (2016, June). "Electromagnetic wave propagation in Particle-In-Cell codes." US Particle Accelerator School (USPAS) Summer Session [PowerPoint slides]. slides 18-24. Available: https://people.nscl.msu.edu/~lund/uspas/scs_2016/lec_adv/A1b_EM_Waves.pdf.
+[6] R. Lehe (2016, June). "Electromagnetic wave propagation in Particle-In-Cell codes." US Particle Accelerator School (USPAS) Summer Session 2016 [PowerPoint slides]. slides 18-24. Available: https://people.nscl.msu.edu/~lund/uspas/scs_2016/lec_adv/A1b_EM_Waves.pdf.
