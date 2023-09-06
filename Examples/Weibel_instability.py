@@ -37,7 +37,7 @@ electron_ys = jax.random.uniform(key,shape=(1,no_pseudoelectrons),minval=-box_si
 electron_zs = jax.random.uniform(key,shape=(1,no_pseudoelectrons),minval=-box_size_z/2,maxval=box_size_z/2)
 electron_xs_array = jnp.transpose(jnp.concatenate((xs,electron_ys,electron_zs)))
 
-'Electron-electron stream with stationary ions'
+
 ion_ys = jax.random.uniform(key,shape=(1,no_pseudoelectrons),minval=-box_size_y/2,maxval=box_size_y/2)
 ion_zs = jax.random.uniform(key,shape=(1,no_pseudoelectrons),minval=-box_size_z/2,maxval=box_size_z/2)
 ion_xs_array = jnp.transpose(jnp.concatenate((xs,ion_ys,ion_zs)))
@@ -65,7 +65,9 @@ q_mes = -1.76e11*jnp.ones(shape=(no_pseudoelectrons,1))
 q_mps = 9.56e7*jnp.ones(shape=(no_pseudoelectrons,1))
 q_ms = jnp.concatenate((q_mes,q_mps))
 
-particles = (particle_xs_array,particle_vs_array,qs,ms,q_ms,no_pseudoelectrons,weight)
+particles = (particle_xs_array,particle_vs_array,qs,ms,q_ms,
+             (no_pseudoelectrons,no_pseudoparticles-no_pseudoelectrons),
+             weight)
 
 E_fields = jnp.zeros(shape=(len(grid),3))
 B_fields = jnp.zeros(shape=(len(grid),3))
@@ -80,7 +82,7 @@ steps_per_snapshot=5
 total_steps=2000
 
 start = time.perf_counter()
-Data = simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,0,0,0,0)
+Data = simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,(0,0,0,0))
 end = time.perf_counter()
 print('Simulation complete, time taken: '+str(end-start)+'s')
 
@@ -109,6 +111,8 @@ ke = jnp.array(Data['Kinetic Energy'])
 B_field_densities = jnp.array(Data['B-field Energy'])
 E_field_densities = jnp.array(Data['E-field Energy'])
 field_energy = jnp.sum(B_field_densities,axis=1) + jnp.sum(E_field_densities,axis=1)
+plt.xlabel('Time/s')
+plt.ylabel('Energy/J')
 plt.plot(t,ke,label='kinetic energy')
 plt.plot(t,field_energy,label='field energies')
 plt.legend()
@@ -117,6 +121,8 @@ plt.legend()
 plt.title('Log plot')
 plt.axvspan(0,0.3e-9,color='yellow',label='Linear growth')
 plt.axvspan(0.3e-9,1e-9,color='purple',label='Instability saturated')
+plt.xlabel('Time/s')
+plt.ylabel('log(Energy/J)')
 plt.plot(t,jnp.log(ke),label='kinetic energy')
 plt.plot(t,jnp.log(field_energy),label='field energies')
 plt.legend()

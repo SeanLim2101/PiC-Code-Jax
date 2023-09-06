@@ -53,7 +53,7 @@ def Ts_in_cells(xs_n,vs_n,ms,weight,species_start,species_end,dx,grid,grid_start
         cell = cells[i]
         m = ms[i,0]/weight
         vnet = v-vds[cell]
-        T = T.at[cell].set(T[cell]+(m/1.38e-23)*jnp.dot(vnet,vnet))
+        T = T.at[cell].set(T[cell]+(m/(3*1.38e-23))*jnp.dot(vnet,vnet))
         return T
     Ts = jax.lax.fori_loop(species_start,species_end,T_per_part,Ts)
     Ts=vmap(jnp.divide)(Ts,parts_per_cell)

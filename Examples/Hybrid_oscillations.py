@@ -71,9 +71,11 @@ q_mes = -1.76e11*jnp.ones(shape=(no_pseudoelectrons,1))
 q_mps = 9.56e7*jnp.ones(shape=(no_pseudoelectrons,1))
 q_ms = jnp.concatenate((q_mes,q_mps))
 
-particles = (particle_xs_array,particle_vs_array,qs,ms,q_ms,no_pseudoelectrons,weight)
+particles = (particle_xs_array,particle_vs_array,qs,ms,q_ms,
+             (no_pseudoelectrons,no_pseudoparticles-no_pseudoelectrons),
+             weight)
 
-#Creating initial fields. Must satisfy Gauss' Law for initial distribution
+#Creating initial fields
 E_fields = jnp.zeros(shape=(len(grid),3))
 for i in range(len(grid)):
     E_fields = E_fields.at[i].set(jnp.array([-weight*1.6e-19*no_pseudoelectrons*A*jnp.sin(2*jnp.pi*(grid[i]+dx/2)/L)/(2*jnp.pi*8.85e-12),0,0]))
@@ -105,7 +107,7 @@ steps_per_snapshot=20
 total_steps=2000
 
 start = time.perf_counter()
-Data = simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,0,0,0,0)
+Data = simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,(0,0,0,0))
 end = time.perf_counter()
 print('Simulation complete, time taken: '+str(end-start)+'s')
 
@@ -115,31 +117,41 @@ t = jnp.array(Data['Time'])
 xs_over_time = jnp.array(Data['Positions'])
 for i in range(len(t)):
     plt.title('Particle positions at timestep '+str(i*steps_per_snapshot))
+    plt.xlabel(r'$x/m$')
+    plt.ylabel('No. of particles')
     plt.ylim([0,1.5*no_pseudoelectrons/len(grid)])
     plt.xlim([-box_size_x/2,box_size_x/2])
-    #plt.axvline((-3e8*dt*i*steps_per_snapshot-box_size_x/2)%box_size_x-box_size_x/2)
     plt.hist(xs_over_time[i,no_pseudoelectrons:,0],jnp.arange(-box_size_x/2,box_size_x/2+dx,dx),color='red',label='ions')
     plt.hist(xs_over_time[i,:no_pseudoelectrons,0],jnp.arange(-box_size_x/2,box_size_x/2+dx,dx),color='blue',label='electrons')
     plt.legend()
     plt.pause(0.1)
     plt.cla()
 #%%
+#Can see elliptical motion
 for i in range(len(t)):
     plt.title('Elliptical Trajectory of particles at time '+str(i*steps_per_snapshot))
-    plt.scatter(xs_over_time[i,:no_pseudoelectrons:int(no_pseudoelectrons/10),0],xs_over_time[i,:no_pseudoelectrons:int(no_pseudoelectrons/10),1])
+    plt.xlabel(r'$x/m$')
+    plt.ylabel(r'$y/m$')
     plt.xlim([-box_size_x/2,box_size_x/2])
     plt.ylim([-box_size_y/2,box_size_y/2])
+    plt.scatter(xs_over_time[i,:no_pseudoelectrons:int(no_pseudoelectrons/10),0],xs_over_time[i,:no_pseudoelectrons:int(no_pseudoelectrons/10),1])
+    
     plt.pause(0.1)
     plt.cla()
 #%%
+#Frequency is correct
 xs_over_time = jnp.array(Data['Positions'])
 particle_no = 1000
 wh = jnp.sqrt(wc**2+wp**2)
-plt.plot(t,xs_over_time[:,particle_no,0],label='Particle')
 
 def sin(x,A,omega,phi,C):
     return A*jnp.sin(omega*x+phi)+C
 p0 = [-0.00015,wh,-jnp.pi/2,-0.003]
 ts = jnp.linspace(0,t[-1],1000)
-plt.plot(ts,sin(ts,*p0),label='wh,frequency = %d'%(p0[1]))
+plt.title('Trajectory of 1000th particle, theoretical $\omega_H=%.2fe10$rad/s' %(wh/1e10))
+plt.xlabel('Time/s')
+plt.ylabel(r'$x/m$')
+
+plt.plot(t,xs_over_time[:,particle_no,0],label='Particle')
+plt.plot(ts,sin(ts,*p0),label=r'$\omega_H$, frequency = %.2fe10rad/s'%(p0[1]/1e10))
 plt.legend()

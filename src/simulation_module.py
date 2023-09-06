@@ -178,7 +178,8 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
                                                                                        part_BC_left,part_BC_right,field_BC_left,field_BC_right,
                                                                                        laser_mag,laser_k)
         
-        #if part_BC_left == 2 or part_BC_right == 2: #Remove particles from simulation, but takes a while to run
+        #Remove particles from simulation, but takes a while to run
+        #if part_BC_left == 2 or part_BC_right == 2: 
         #    xs_nplushalf,xs_nminushalf,vs_n,qs,ms,q_ms,xs_n = remove_particles(xs_nplushalf,xs_n,xs_nminushalf,vs_n,qs,ms,q_ms,box_size_x,part_BC_left,part_BC_right)
         
         steps_taken += steps_per_snapshot
@@ -191,23 +192,30 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
                  B_fields[:,0],B_fields[:,1],B_fields[:,2],jax.block_until_ready(get_B_energy(B_fields,dx)),
                  chargedens_n]
         
-        for i, indices in enumerate(pseudospecies_indices):
-            ni_t = jnp.histogram(xs_n[indices[0]:indices[1],0],
-                                 bins=jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1))[0]
-            species_i_temp = jax.block_until_ready(Ts_in_cells(xs_n,vs_n,ms,weight,
-                                                               indices[0],indices[1],dx,grid,grid_start))
-            v_rms, species_i_velocities =  jax.block_until_ready(histogram_velocities_x(vs_n,indices[0],indices[1]))
-            datas.append(ni_t)
-            datas.append(species_i_temp)
-            datas.append(jnp.insert(species_i_velocities,0,v_rms))
         
         if write_to_file == True:
+            for i, indices in enumerate(pseudospecies_indices):
+                ni_t = jnp.histogram(xs_n[indices[0]:indices[1],0],
+                                     bins=jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1))[0]
+                species_i_temp = jax.block_until_ready(Ts_in_cells(xs_n,vs_n,ms,weight,
+                                                                   indices[0],indices[1],dx,grid,grid_start))
+                v_rms, species_i_velocities =  jax.block_until_ready(histogram_velocities_x(vs_n,indices[0],indices[1]))
+                datas.append(ni_t)
+                datas.append(species_i_temp)
+                datas.append(jnp.insert(species_i_velocities,0,v_rms))
+                
             for i,data in enumerate(datas):
                 with open(path_to_file+datafile_names[i],'a') as f:
                     writer = csv.writer(f)
                     writer.writerow(data)
 
         elif write_to_file == False:
+            
+            for i, indices in enumerate(pseudospecies_indices):
+                species_i_temp = jax.block_until_ready(Ts_in_cells(xs_n,vs_n,ms,weight,
+                                                                   indices[0],indices[1],dx,grid,grid_start))
+                datas.append(species_i_temp)
+            
             ts.append(datas[0][0])
             ke_over_time.append(datas[1][0])
             xs_over_time.append(xs_n)
@@ -217,7 +225,7 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
             B_fields_over_time.append(B_fields)
             B_field_energy.append(datas[9])
             chargedens_over_time.append(datas[10])
-            Ts_over_time.append((datas[12],datas[15]))
+            Ts_over_time.append((datas[11],datas[12]))
     
     if write_to_file == False:
         return {'Time':ts,

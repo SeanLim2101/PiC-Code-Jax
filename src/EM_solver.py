@@ -8,10 +8,13 @@ Created on Fri Aug  4 12:45:47 2023
 
 from jax import jit
 import jax.numpy as jnp
+from particles_to_grid import find_chargedens_grid
 from boundary_conditions import field_ghost_cells_E,field_ghost_cells_B
 
 @jit
-def find_E0_by_matrix(chargedens,dx,grid):
+def find_E0_by_matrix(xs_n,qs,dx,grid,part_BC_left,part_BC_right):
+    chargedens = find_chargedens_grid(xs_n,qs,dx,grid,part_BC_left,part_BC_right)
+    
     matrix = jnp.diag(jnp.ones(len(grid)))-jnp.diag(jnp.ones(len(grid)-1),k=-1)
     matrix.at[0,-1].set(-1)
     E_field_from_matrix = (dx/8.85e-12)*jnp.linalg.solve(matrix,chargedens)

@@ -121,22 +121,21 @@ The schematic of one cycle of the simulation is shown:
 ![diagram of one cycle of the simulation](Images/cycle.png)
 
 The Equations to be solved are:
-![#ff0000](https://placehold.co/15x15/ff0000/ff0000.png):
--$\frac{\partial B}{\partial t} = -\nabla\times E$
--$\frac{\partial E}{\partial t} = c^2\nabla\times B-\frac{j}{\varepsilon_0}$
-</span>
 
-<span style="color: green;">
-  * (in $x$) $\nabla j = -\frac{\partial\rho}{\partial t}$
-  * (in $y,z$) $j=nqv$
-</span>
+![#ff0000](https://placehold.co/15x15/ff0000/ff0000.png):<ol>
+<li>$\frac{\partial B}{\partial t} = -\nabla\times E$</li>
+<li>$\frac{\partial E}{\partial t} = c^2\nabla\times B-\frac{j}{\varepsilon_0}$</li>
+</ol>
 
-<span style="color: orange;">
-  * $\frac{dv}{dt}=q(E+v\times B)$
-  * $\frac{dx}{dt}=v$
-</span>
+![#009933](https://placehold.co/15x15/009933/009933.png):<ol>
+<li>(in $x$) $\nabla j = -\frac{\partial\rho}{\partial t}$</li>
+<li>(in $y,z$) $j=nqv$</li>
+</ol>
 
-![equations to solve](Images/eqns_to_solve.png)
+![#ff6633](https://placehold.co/15x15/ff6633/ff6633.png):<ol>
+<li>$\frac{dv}{dt}=q(E+v\times B)$</li>
+<li>$\frac{dx}{dt}=v$</li>
+</ol>
 
 ### 1. The Particle Pusher
 The particle pusher functions are contained in the particle_mover.py module.
@@ -154,15 +153,15 @@ These functions are contained in the particles_to_grid.py module.
 
 Particles are taken as pseudoparticles with a weight $\Omega$ such that number density $n=\frac{N_{p}\Omega}{L}$ where $N_{p}$ is the number of pseudoparticles. This is in agreement with the 1D grid, where $\Omega$ carries an 'areal weight' on top of a normal weight (units of no. of actual particles/ $m^2$ ). The pseudoparticles have a triangular shape function of width $2\Delta x$, as used in EPOCH [3]. This smooths out the properties on the grid to reduce numerical noise.
 
-![shape function of particles](Images/shapefunction.png). 
+![shape function of particles](Images/shapefunction.png)
 
-Thus when copying particle charges onto the grid, the charge density is:
+Thus when copying particle charges onto the grid, the charge density in cell $i$ is:
 
--For $|X-x_i|\leq\frac{\Delta x}{2}$ (left and right sides of particle), $\rho=\frac{q}{\Delta x}\left(\frac{3}{4}-\frac{(X-x_i)^2}{\Delta x^2}\right)$.
+-For $|X-x_i|\leq\frac{\Delta x}{2}$ (particle is in cell), $\rho=\frac{q}{\Delta x}\left(\frac{3}{4}-\frac{(X-x_i)^2}{\Delta x^2}\right)$.
 
--For $\frac{\Delta x}{2}\leq|X-x_i|\leq\frac{3\Delta x}{2}$ (centre of particle), $\rho = \frac{q}{2\Delta x}\left(\frac{3}{2}-\frac{|X-x_i|}{\Delta x}\right)^2$.
+-For $\frac{\Delta x}{2}\leq|X-x_i|\leq\frac{3\Delta x}{2}$ (particle is in the next cell), $\rho = \frac{q}{2\Delta x}\left(\frac{3}{2}-\frac{|X-x_i|}{\Delta x}\right)^2$.
 
--For $\frac{3\Delta x}{2}\geq|X-x_i|$ (outside $2\Delta x$), $\rho=0$.
+-For $\frac{3\Delta x}{2}\geq|X-x_i|$ (particle is at least 2 cells away), $\rho=0$.
 
 The current density is found using the equation $\frac{\partial j}{\partial x} = -\frac{\partial\rho}{\partial t}$, as in Villasenor and Buneman [4] and EPOCH [5]. This is done by sweeping the grid from left to right. In one timestep, each particle can travel at most 1 cell (since the simulation becomes unstable as $\frac{dx}{dt}\to3\times10^8$), so with the shape function, we only need to sweep between -3 to 2 spaces from the particle's initial cell, where the first cell is empty as the starting point for the sweeping.
 
@@ -197,15 +196,14 @@ Boundary conditions are also specified to find charge densities based on chosen 
 The code supports 3 particle BC modes, and 3 field BC modes, to be specified on each side. They are displayed in this table :
 Particle table:
 
-| Mode | BC | Particle position, where L/R is left/right x-position of box	| Particle velocity |	Force experienced by particle in ghost cells GL1/GL2/GR|
+| Mode | BC | Particle position	| Particle velocity |	Force experienced by particle in ghost cells GL1/GL2/GR|
 |---|---|---|---|---|
-| 0 | Periodic | Move particle back to other side of box. This is done with the modulo function. When particle escapes to the right, x’ = (x-R)%(length of box)+L. When particle escapes to the left, x’ = (x-R)%(length of box)-L. | No change. | GL1 = 2nd last cell </br> GL2 = Last cell </br> GR = First cell |
-| 1 | Reflective | Move particle back the excess distance. When particle escapes to the right, x’ = R-(x-R)=2R-x. When particle escapes to the left, x’ = L+(L-x)=2L-x. | Multiply x-component by -1. | GL1 = 2nd cell </br> GL2 = First cell </br> GR = Last cell |
-| 2 | Destructive | Park particles on either side outside the box. JAX needs fixed array lengths, so removing particles causes it to recompile functions each time and increases the code runtime. </br></br> Arbitrarily set their position outside of the box, currently at L-Δx for the left and R+2.5Δx for the right. (When calling jnp.arange to produce the grid, the elements towards the end start producing some numerical deviation, parking the particle exactly on the next ghost cell produces some issues. However, when indexing beyond the length of the array, JAX will take the last element of the array. Thus we can park the particle a few $\Delta x$'s away.) </br></br> Also set q and q/m to 0 so they do not contribute any charge density/current. | Set to 0. | GL1 = 0 </br> GL2 = 0 </br> GR = 0 |
+| 0 | Periodic | Move particle back to other side of box. This is done with the modulo function to find the distance left from the cell. | No change. | GL1 = 2nd last cell </br> GL2 = Last cell </br> GR = First cell |
+| 1 | Reflective | Move particle back the excess distance. | Multiply x-component by -1. | GL1 = 2nd cell </br> GL2 = First cell </br> GR = Last cell |
+| 2 | Destructive | Park particles on either side outside the box. JAX needs fixed array lengths, so removing particles causes it to recompile functions each time and increases the code runtime. </br></br> Arbitrarily set their position outside of the box, currently at L-Δx for the left and R+2.5Δx for the right, where L/R is left/right x-position of box. (When calling jnp.arange to produce the grid, the elements towards the end start producing some numerical deviation, parking the particle exactly on the next ghost cell produces some issues. However, when indexing beyond the length of the array, JAX will take the last element of the array. Thus we can park the particle a few $\Delta x$'s away.) </br></br> Also set q and q/m to 0 so they do not contribute any charge density/current. | Set to 0. | GL1 = 0 </br> GL2 = 0 </br> GR = 0 |
 
-![table of particle BC modes](Images/part_BC_table.png)
 Note the need to use 2 ghost cells on the left due to the leftmost edges of particles in the first half cell undefined when using the staggered grid  while finding E-field experienced.
-Note y and z BCs are always periodic.
+Also note $y$ and $z$ BCs are always periodic.
 
 Field table:
 
@@ -213,14 +211,15 @@ Field table:
 |---|---|---|
 | 0 | Periodic | GL = Last cell </br> GR = First cell |
 | 1 | Reflective | GL = First cell </br> GR = Last cell |
-| 2 | Transmissive | Silver-Mueller BCs [6]. By applying conditions for a left-propagating wave for the left cell (E_y=-cB_z,E_z=cB_y) and a right-propagating wave for the right (E_y=cB_z,E_z=-cB_y),  and with a simple averaging to account for the staggering, we get: </br></br> $E_{yL}=-E_{y0}-2cB_{z0}$ </br> $E_{zL}=-E_{z0}+2cB_{y0}$ </br> $B_{yL}=3B_{y0}-\frac{2}{c}E_{z0}$ </br> $B_{zL}=3B_{z0}+\frac{2}{c}E_{y0}$ </br> </br> $E_{yR}=3E_{y,-1}-2cB_{z,-1}$ </br> $E_{zR}=3E_{z,-1}+2cB_{y,-1}$ </br> $B_{yR}=-B_{y,-1}-\frac{2}{c}E_{z,-1}$ </br> $B_{zR}= -B_{z,-1}+\frac{2}{c}E_{y,-1}$ </br> </br> This gives us a zero-order approximation for transmissive BCs. |
+| 2 | Transmissive | Silver-Mueller BCs [6]. By applying conditions for a left-propagating wave for the left cell (E_y=-cB_z,E_z=cB_y) and a right-propagating wave for the right (E_y=cB_z,E_z=-cB_y),  and with a simple averaging to account for the staggering (for example $\frac{E_{-1}+E_0}{2}=B_0$), we get: </br></br> $E_{yL}=-E_{y0}-2cB_{z0}$ </br> $E_{zL}=-E_{z0}+2cB_{y0}$ </br> $B_{yL}=3B_{y0}-\frac{2}{c}E_{z0}$ </br> $B_{zL}=3B_{z0}+\frac{2}{c}E_{y0}$ </br> </br> $E_{yR}=3E_{y,-1}-2cB_{z,-1}$ </br> $E_{zR}=3E_{z,-1}+2cB_{y,-1}$ </br> $B_{yR}=-B_{y,-1}-\frac{2}{c}E_{z,-1}$ </br> $B_{zR}= -B_{z,-1}+\frac{2}{c}E_{y,-1}$ </br> </br> This gives us a zero-order approximation for transmissive BCs. |
 | 3 | Laser | For laser amplitude A and wavenumber k defined at the start, </br></br> $E_{yL}=Asin(kct)$ </br> $B_{zL}=\frac{A}{c} sin(kct)$ </br> $E_{yR}=Asin(kct)$ </br> $B_{zR}=-\frac{A}{c} sin(kct)$ |
-![table of field BC modes](Images/field_BC_table.png)
 
 ### Diagnostics
 Apart from the core solver, there is an additional diagnostics.py module for returning useful output. In it are functions to find the system's total kinetic energy, E-field density, B-field density, temperature at each cell and velocity histogram. These are returned in the output.
 
-Temperature is calculated using $$
+Temperature is calculated in each cell first by finding and subtracting any drift velocity $<v>$ from the particles in the cell, then using $\frac{1}{2}mv^2=\frac{3}{2}kT$ for each particle and adding up the temperatures.
+
+In this module is also a function to perform Fourier transforms on number density data.
 
 ### The simulation.py module
 Finally, the simulation.py module puts it all together. It defines one step in the cycle, which is called in an n_cycles function so we can take many steps before performing diagnosis for long simulations where timescales of phenomenon are much longer than the dt required to maintain stability ($\frac{dx}{dt}<3\times10^8$). 
@@ -228,13 +227,20 @@ Finally, the simulation.py module puts it all together. It defines one step in t
 This outermost function n_cycles, as well as any other outermost functions in the simulation function, are decorated with @jit for jax to compile the function and any other function called inside it, as well as block_until_ready statements placed where necessary to run on GPUs. 
 
 ## Examples
+In the examples folder there are some example simulations showing typical plasma behaviour, mostly set out by Langdon and Birdsall [7]. They are, with their approximate runtime on my local PC and some notes based on how far I got on them during the project:
+<ol>
+<li> Plasma oscillations (16s). </li>
+<li> Plasma waves (130s). A Fourier transform was performed to find the dominant modes in the simulation (pre-FT plot is also available on line 141). While the FT plot takes the shape of the dispersion relation, there are strong modes in the entire area below the line as well. </li>
+<li> Hybrid oscillations (43s). Elliptical motion of particles can be seen, and frequency agrees with theoretical frequency of $\omega_H=\omega_C^2+\omega_P^2$ where $\omega_C$ is cyclotron frequency and $\omega_P$ is plasma frequency. Note particles have to be initialised with a velocity based on their position to see the elliptical motion, and this velocity must be $&lt&lt c$ to ensure the system is electrostatic. </li>
+<li> 2-stream instability (225s). A 2D histogram on the position and velocity was performed to plot the system in phase space. 2 configurations were tested, one with 2 2 groups of electrons with opposite velocities in a sea of protons, and one with positrons and electrons travelling in opposite directions. Changing the grid resolution changes the modes that can be captured by the simulation, leading to different patterns in phase space. The last 2 cells plot the system's energy, and the conversion of kinetic energy to electric field energy can be seen, as well as the point where the instability starts becoming saturated. </li>
+<li> Weibel instability (100s). With 2 groups of electrons, one moving in $+z$ direction and one in $-z$ direction, B-fields can clearly be seen growing, and current filaments forming and merging. The last 2 cells show energy plots, and a log plot showing the growth and saturation of the instability.</li>
+<li> Precursor (110s). A laser travels into an underdense plasma, and a small attenuation can be seen. However, a portion of the wave appears to be reflected. One can also try an overdense plasma and see that most of the wave is reflected and in the plasma, it is shorted out by the plasma.
 
-In the examples folder there are some example simulations showing typical plasma behaviour. Includes plasma oscillations, plasma waves, 2-stream instability, weibel instability, hybrid oscillations.
 
 # References
-[1] H. Qin, S. Zhang, J. Xiao, J. Liu, Y. Sun, W. M. Tang (2013, August). "Why is Boris algorithm so good. Physics of Plasmas [Online]. vol. 20, issue 8. Available: https://doi.org/10.1063/1.4818428.
+[1] H. Qin, S. Zhang, J. Xiao, J. Liu, Y. Sun, W. M. Tang (2013, August). "Why is Boris algorithm so good." Physics of Plasmas [Online]. vol. 20, issue 8. Available: https://doi.org/10.1063/1.4818428.
 
-[2] A. Hakim (2021). "Computational Methods in Plasma Physics Lecture II." PPPL Graduate Summer School 2021[PowerPoint slides]. slide 19. Available: https://cmpp.readthedocs.io/en/latest/_static/lec2-2021.pdf.
+[2] A. Hakim (2021). "Computational Methods in Plasma Physics Lecture II." PPPL Graduate Summer School 2021 [PowerPoint slides]. slide 19. Available: https://cmpp.readthedocs.io/en/latest/_static/lec2-2021.pdf.
 
 [3] C. Brady, K. Bennett, H. Schmitz, C. Ridgers (2021, June). Section 4.3.1 "Particle Shape Functions" in "Developers Manual for the EPOCH PIC Codes." Version 4.17.0. Latest version available: https://github.com/Warwick-Plasma/EPOCH_manuals/releases.
 
@@ -243,3 +249,5 @@ In the examples folder there are some example simulations showing typical plasma
 [5] C. Brady, K. Bennett, H. Schmitz, C. Ridgers (2021, June). Section 4.3.2 "Current Calculation" in "Developers Manual for the EPOCH PIC Codes." Version 4.17.0. Latest version available: https://github.com/Warwick-Plasma/EPOCH_manuals/releases.
 
 [6] R. Lehe (2016, June). "Electromagnetic wave propagation in Particle-In-Cell codes." US Particle Accelerator School (USPAS) Summer Session 2016 [PowerPoint slides]. slides 18-24. Available: https://people.nscl.msu.edu/~lund/uspas/scs_2016/lec_adv/A1b_EM_Waves.pdf.
+
+[7] C.K. Birdsall, A.B. Langdon. Plasma Physics via Computer Simulation (1st ed.). Bristol: IOP Publishing Ltd, 1991.

@@ -22,7 +22,7 @@ dx=3e-4
 grid = jnp.arange(-box_size_x/2+dx/2,box_size_x/2+dx/2,dx)
 staggered_grid = grid + dx/2
 
-#Creating particle ICs, with xs defined half time step in front
+#Creating particle ICs
 no_pseudoelectrons = 10000
 L= box_size_x
 xs = jnp.array([jnp.linspace(-L/2,L/2,no_pseudoelectrons)])
@@ -85,7 +85,9 @@ q_mes = -1.76e11*jnp.ones(shape=(no_pseudoelectrons,1))
 q_mps = 1.76e11*jnp.ones(shape=(no_pseudoelectrons,1))
 q_ms = jnp.concatenate((q_mes,q_mps))
 #%%
-particles = (particle_xs_array,particle_vs_array,qs,ms,q_ms,no_pseudoelectrons,weight)
+particles = (particle_xs_array,particle_vs_array,qs,ms,q_ms,
+             (no_pseudoelectrons,no_pseudoparticles-no_pseudoelectrons),
+             weight)
 
 #Creating initial fields
 E_fields = jnp.zeros(shape=(len(grid),3))
@@ -110,7 +112,7 @@ steps_per_snapshots=5
 total_steps=3000
 
 start = time.perf_counter()
-Data = simulation(steps_per_snapshots,total_steps,ICs,ext_fields,dx,dt,0,0,0,0)
+Data = simulation(steps_per_snapshots,total_steps,ICs,ext_fields,dx,dt,(0,0,0,0))
 end = time.perf_counter()
 print('Simulation complete, time taken: '+str(end-start)+'s')
 
@@ -132,17 +134,22 @@ for i in range(len(t)):
 E_fields= jnp.array(Data['E-fields'])
 for i in range(len(t)):
     plt.title('E-field at timestep '+str(i*steps_per_snapshots))
+    plt.xlabel(r'$x/m$')
+    plt.ylabel(r'E-field strength/$Vm^{-1}$')
     plt.plot(grid,E_fields[i,:,0])
     plt.pause(0.1)
     plt.cla()
 #%%
-#Can see charge bunching
+#Can see initial charge bunching
 xs_over_time = jnp.array(Data['Positions'])
 for i in range(len(t)):
     plt.title('Particle positions at timestep '+str(i*steps_per_snapshots))
     plt.ylim([0,1.5*no_pseudoelectrons/len(grid)])
     plt.xlim([-box_size_x/2,box_size_x/2])
+    plt.xlabel(r'$x/m$')
+    plt.ylabel('No. of Particles')
     plt.hist(xs_over_time[i,no_pseudoelectrons:,0],jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1),color='red',label='ions')
+    #plt.hist(xs_over_time[i,no_pseudoelectrons:,0],jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1),color='red',label='positrons')
     plt.hist(xs_over_time[i,:no_pseudoelectrons,0],jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1),color='blue',label='electrons')
     plt.legend()
     plt.pause(0.1)
@@ -151,14 +158,22 @@ for i in range(len(t)):
 ke_over_time = jnp.array(Data['Kinetic Energy'])
 E_field_energy_density = jnp.array(Data['E-field Energy'])
 E_field_energy = jnp.sum(E_field_energy_density,axis=1)
+plt.title('Energy Transfer of the System')
+plt.ylabel('Energy/J')
+plt.xlabel('Time/s')
 plt.plot(t,ke_over_time,label='Kinetic Energy')
 plt.plot(t,E_field_energy,label='Electric field Energy')
+plt.grid()
 plt.legend()
 plt.show()
 #%%
-plt.title('Log plot')
-#plt.axvspan(0,0.3e-9,color='yellow',label='Linear growth')
-#plt.axvspan(0.3e-9,1e-9,color='purple',label='Instability saturated')
+plt.title('Log Plot of Energy')
+plt.axvspan(0,0.15e-9,color='yellow',label='Linear growth')
+plt.axvspan(0.15e-9,t[-1],color='purple',label='Instability saturated')
+plt.xlabel('Time/s')
+plt.ylabel('log(Energy/J)')
 plt.plot(t,jnp.log(ke_over_time),label='kinetic energy')
 plt.plot(t,jnp.log(E_field_energy),label='E-field energies')
+plt.grid()
 plt.legend()
+plt.show()
