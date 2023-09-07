@@ -27,12 +27,9 @@ For N particles and M cells,
       </ol>
     </li>
     <li>ext_fields contains (array of E-fields,array of B-fields) where both are $M\times3$ arrays specifying external E- and B- fields.
-
+    <li>BCs is a 4-integer tuple representing (left particle BC, right particle BC, left field BC, right field BC). Particle BCs are 0 for periodic, 1 for reflective and 2 for destructive. Field BCs are 0 for periodic, 1 for reflective, 2 for trasnsmissive and 3 for laser. Detailed information on how these BCs work can be found below. If 3 for field BCs is selected, the laser magnitude and wavenumber must be specified with the arguments laser_mag and laser_k (both default 0). </li>
+</ol>
 Note the staggered grid when dealing with E-fields, which are defined on the edges of cells.
-
-BCs is a 4-integer tuple representing (left particle BC, right particle BC, left field BC, right field BC). Particle BCs are 0 for periodic, 1 for reflective and 2 for destructive. Field BCs are 0 for periodic, 1 for reflective, 2 for trasnsmissive and 3 for laser. Detailed information on how these BCs work can be found below.
-
-If 3 for field BCs is selected, the laser magnitude and wavenumber must be specified with the arguments laser_mag and laser_k (both default 0).
 
 In the Examples folder example_script.py gives a skeleton for the initialisation.
 
@@ -42,7 +39,7 @@ The simulation supports 2 forms of output, as a returned dictionary variable or 
 For smaller simulations, the code saves all particle $x$-positions and velocities as a $N_t\times N\times3$ array for more flexibility in manipulation, for example for the 2D-histogramming in the 2-stream instability example. The dictionary keys are: 'Time',
 'Kinetic Energy','Positions','Velocities','E-fields','E-field Energy','B-fields','B-field Energy','Charge Densities','Temperature' where 'Temperature' returns a $2\times M$ array for the first 2 species.
 
-For larger simulations, the $x$-positions are histogrammed by cell and velocities are histogrammed in 30 bins from $-3v_{rms}$ to $3v_{rms}$. The path to save the files can be defined by the path_to_file argument, default in the current working directory. CSV file names are 'time.csv','kinetic_energy.csv','E_x.csv','E_y.csv','E_z.csv','E_energy_densities.csv','B_x.csv','B_y.csv','B_z.csv','B_energy_densities.csv','chargedens.csv'. For each species there will be a 'species_no_densities.csv', 'species_temp.csv' and 'species_vx_dist.csv'.
+For larger simulations, the $x$-positions are histogrammed by cell and velocities are histogrammed in 30 bins from $-3v_{rms}$ to $3v_{rms}$. The path to save the files can be defined by the path_to_file argument, default in the current working directory. CSV file names are 'time.csv', 'kinetic_energy.csv', 'E_x.csv', 'E_y.csv', 'E_z.csv', 'E_energy_densities.csv', 'B_x.csv', 'B_y.csv', 'B_z.csv', 'B_energy_densities.csv', 'chargedens.csv'. For each species there will be a 'species_no_densities.csv', 'species_temp.csv' and 'species_vx_dist.csv'.
 
 ## Why JAX?
 JAX is a Python module utilising the XLA (accelerated Linear Algebra) compiler to create efficient machine learning code. The github repository can be found <a href='https://github.com/google/jax'>here</a>. So why are we using it to write PIC code? 
@@ -118,7 +115,7 @@ The core of the simulation consists of four parts:
 </ol>
 
 The schematic of one cycle of the simulation is shown:
-![diagram of one cycle of the simulation](Images/cycle.png)
+![diagram of one cycle of the simulation](./Images/cycle.png)
 
 The Equations to be solved are:
 
@@ -153,7 +150,7 @@ These functions are contained in the particles_to_grid.py module.
 
 Particles are taken as pseudoparticles with a weight $\Omega$ such that number density $n=\frac{N_{p}\Omega}{L}$ where $N_{p}$ is the number of pseudoparticles. This is in agreement with the 1D grid, where $\Omega$ carries an 'areal weight' on top of a normal weight (units of no. of actual particles/ $m^2$ ). The pseudoparticles have a triangular shape function of width $2\Delta x$, as used in EPOCH [3]. This smooths out the properties on the grid to reduce numerical noise.
 
-![shape function of particles](Images/shapefunction.png)
+![shape function of particles](./Images/shapefunction.png)
 
 Thus when copying particle charges onto the grid, the charge density in cell $i$ is:
 
@@ -165,14 +162,14 @@ Thus when copying particle charges onto the grid, the charge density in cell $i$
 
 The current density is found using the equation $\frac{\partial j}{\partial x} = -\frac{\partial\rho}{\partial t}$, as in Villasenor and Buneman [4] and EPOCH [5]. This is done by sweeping the grid from left to right. In one timestep, each particle can travel at most 1 cell (since the simulation becomes unstable as $\frac{dx}{dt}\to3\times10^8$), so with the shape function, we only need to sweep between -3 to 2 spaces from the particle's initial cell, where the first cell is empty as the starting point for the sweeping.
 
-![current sweeping method](Images/current_sweep.png)
+![current sweeping method](./Images/current_sweep.png)
 
 The current in y and z direction use $j=nqv$, or more precisely $j=N_p\rho v$.
 
 ### 3. The EM solver
 The EM solver is contained in the EM_solver.py module.A staggered Yee grid is used, where E-fields are defined on right-side cell edges and B-fields are defined on cell centres. 
 
-![yee grid](Images/yee_grid.png)
+![yee grid](./Images/yee_grid.png)
 
 The equations to solve are $Ampere$ and $Faraday$. We do not solve Gauss' Law directly, as Poisson solvers can lead to numerical issues, and Gauss' Law is automatically obeyed if we use the charge conservation equation, provided Gauss' Law was satisfied at the start.
 
@@ -211,13 +208,13 @@ Field table:
 |---|---|---|
 | 0 | Periodic | GL = Last cell </br> GR = First cell |
 | 1 | Reflective | GL = First cell </br> GR = Last cell |
-| 2 | Transmissive | Silver-Mueller BCs [6]. By applying conditions for a left-propagating wave for the left cell (E_y=-cB_z,E_z=cB_y) and a right-propagating wave for the right (E_y=cB_z,E_z=-cB_y),  and with a simple averaging to account for the staggering (for example $\frac{E_{-1}+E_0}{2}=B_0$), we get: </br></br> $E_{yL}=-E_{y0}-2cB_{z0}$ </br> $E_{zL}=-E_{z0}+2cB_{y0}$ </br> $B_{yL}=3B_{y0}-\frac{2}{c}E_{z0}$ </br> $B_{zL}=3B_{z0}+\frac{2}{c}E_{y0}$ </br> </br> $E_{yR}=3E_{y,-1}-2cB_{z,-1}$ </br> $E_{zR}=3E_{z,-1}+2cB_{y,-1}$ </br> $B_{yR}=-B_{y,-1}-\frac{2}{c}E_{z,-1}$ </br> $B_{zR}= -B_{z,-1}+\frac{2}{c}E_{y,-1}$ </br> </br> This gives us a zero-order approximation for transmissive BCs. |
+| 2 | Transmissive | Silver-Mueller BCs [6]. By applying conditions for a left-propagating wave for the left cell ($E_y=-cB_z,E_z=cB_y$) and a right-propagating wave for the right ($E_y=cB_z,E_z=-cB_y$),  and with a simple averaging to account for the staggering (for example $\frac{E_{L}+E_0}{2}=B_0$), we get: </br></br> $E_{yL}=-E_{y0}-2cB_{z0}$ </br> $E_{zL}=-E_{z0}+2cB_{y0}$ </br> $B_{yL}=3B_{y0}-\frac{2}{c}E_{z0}$ </br> $B_{zL}=3B_{z0}+\frac{2}{c}E_{y0}$ </br> </br> $E_{yR}=3E_{y,-1}-2cB_{z,-1}$ </br> $E_{zR}=3E_{z,-1}+2cB_{y,-1}$ </br> $B_{yR}=-B_{y,-1}-\frac{2}{c}E_{z,-1}$ </br> $B_{zR}= -B_{z,-1}+\frac{2}{c}E_{y,-1}$ </br> </br> This gives us a zero-order approximation for transmissive BCs. |
 | 3 | Laser | For laser amplitude A and wavenumber k defined at the start, </br></br> $E_{yL}=Asin(kct)$ </br> $B_{zL}=\frac{A}{c} sin(kct)$ </br> $E_{yR}=Asin(kct)$ </br> $B_{zR}=-\frac{A}{c} sin(kct)$ |
 
 ### Diagnostics
 Apart from the core solver, there is an additional diagnostics.py module for returning useful output. In it are functions to find the system's total kinetic energy, E-field density, B-field density, temperature at each cell and velocity histogram. These are returned in the output.
 
-Temperature is calculated in each cell first by finding and subtracting any drift velocity $<v>$ from the particles in the cell, then using $\frac{1}{2}mv^2=\frac{3}{2}kT$ for each particle and adding up the temperatures.
+Temperature is calculated in each cell first by finding and subtracting any drift velocity $&lt v&gt>$ from the particles in the cell, then using $\frac{1}{2}mv^2=\frac{3}{2}kT$ for each particle and adding up the temperatures.
 
 In this module is also a function to perform Fourier transforms on number density data.
 
