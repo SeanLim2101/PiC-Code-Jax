@@ -66,8 +66,10 @@ def field_2_ghost_cells(part_BC_left,part_BC_right,field):
     return field_ghost_cell_L2, field_ghost_cell_L1, field_ghost_cell_R
 
 def chargedens_BCs(part_BC_left,part_BC_right,x,dx,grid,q):
+    #If particle is on left/right cell, how much charge is out of grid?
     rem_charge_left = (q/dx)*jnp.where(abs(x-grid[0])<=dx/2,0.5*(0.5+(grid[0]-x)/dx)**2,0)
     rem_charge_right = (q/dx)*jnp.where(abs(grid[-1]-x)<=dx/2,0.5*(0.5+(x-grid[-1])/dx)**2,0)
+    #Where should extra charge go?
     charge_for_L = jnp.where(part_BC_left==0,rem_charge_right,
                    jnp.where(part_BC_left==1,rem_charge_left,
                    jnp.where(part_BC_left==2,0,
@@ -87,12 +89,12 @@ def set_BCs(x_n,v_n,q,q_m,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,
     x_n0 = jnp.where(x_n[0]<-box_size_x/2, #set left BC
                      jnp.where(part_BC_left==0,(x_n[0]+box_size_x/2)%(box_size_x)-box_size_x/2,
                      jnp.where(part_BC_left==1,-box_size_x-x_n[0],
-                     jnp.where(part_BC_left==2,grid[0]-1.5*dx,
+                     jnp.where(part_BC_left==2,grid[0]-1.5*dx, #Park particles here
                                x_n[0]))),
            jnp.where(x_n[0]>box_size_x/2, #set right BC
                      jnp.where(part_BC_right==0,(x_n[0]+box_size_x/2)%(box_size_x)-box_size_x/2,
                      jnp.where(part_BC_right==1,box_size_x-x_n[0],
-                     jnp.where(part_BC_right==2,grid[-1]+3*dx,
+                     jnp.where(part_BC_right==2,grid[-1]+3*dx, #Park particles here
                                x_n[0]))),
                      x_n[0]))
 
@@ -117,7 +119,8 @@ def set_BCs(x_n,v_n,q,q_m,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,
 
 
 def set_BCs_no_v(x_n,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right):
-    #set just x_n BCs since half step vs are not required
+    #Half-steps only used in jy, jz calculations, which only need particle 
+    #positions for easy calculation
     #Periodic in y and z
     x_n1 = (x_n[1]+box_size_y/2)%(box_size_y)-box_size_y/2
     x_n2 = (x_n[2]+box_size_z/2)%(box_size_z)-box_size_z/2
@@ -138,7 +141,6 @@ def set_BCs_no_v(x_n,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_
 
 @jit
 def set_BCs_all(xs_n,vs_n,qs,ms,q_ms,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right):   
-    #For non-destructive BCs
     xs_n, vs_n ,qs, q_ms= vmap(lambda x_n,v_n,q,q_m:
                                 set_BCs(x_n,v_n,q,q_m,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right)
                                 )(xs_n,vs_n,qs,q_ms)
@@ -146,13 +148,15 @@ def set_BCs_all(xs_n,vs_n,qs,ms,q_ms,dx,grid,box_size_x,box_size_y,box_size_z,pa
 
 @jit
 def set_BCs_all_midsteps(xs_n,qs,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right):
-    #For non-destructive BCs
+    #Half-steps only used in jy, jz calculations, which only need particle 
+    #positions for easy calculation
     xs_n = vmap(lambda x_n:
                 set_BCs_no_v(x_n,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right)
                 )(xs_n)
     return xs_n
 
 def remove_particles(xs_nplushalf,xs_n,xs_nminushalf,vs_n,qs,ms,q_ms,box_size_x,part_BC_left,part_BC_right):
+    #Removing particles makes JAX recompile, making code very slow
     indices_to_remove = jnp.nonzero(((xs_nplushalf[:,0]<-box_size_x/2)&(part_BC_left==2))
                                     |((xs_nplushalf[:,0]>box_size_x/2)&(part_BC_right==2)))[0]
     

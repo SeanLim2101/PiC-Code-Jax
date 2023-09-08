@@ -92,6 +92,7 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
     ms=ICs[1][3]
     q_ms=ICs[1][4]
     no_each_pseudospecies = ICs[1][5]
+    #Create indices to separate species based on no_each_pseudospecies
     pseudospecies_indices = []
     for i,no_pseudospecies in enumerate(no_each_pseudospecies):
         if i == 0:
@@ -115,12 +116,12 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
     field_BC_left = BCs[2]
     field_BC_right = BCs[3]
     
+    #Move half step forward to begin cycle
     xs_nplushalf,vs_n,qs,ms,q_ms = jax.block_until_ready(set_BCs_all(xs_n+(dt/2)*vs_n,vs_n,qs,ms,q_ms,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right))
     xs_nminushalf = jax.block_until_ready(set_BCs_all_midsteps(xs_n-(dt/2)*vs_n,qs,dx,grid,box_size_x,box_size_y,box_size_z,part_BC_left,part_BC_right))
     
-    
     if write_to_file == True:
-        
+        #Create data files
         cell_headers = []
         for i in range(len(grid)):
             cell_headers.append('cell '+str(i))
@@ -195,6 +196,7 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
         
         if write_to_file == True:
             for i, indices in enumerate(pseudospecies_indices):
+                #Find number density, temperature and velocity for each species
                 ni_t = jnp.histogram(xs_n[indices[0]:indices[1],0],
                                      bins=jnp.linspace(-box_size_x/2,box_size_x/2,len(grid)+1))[0]
                 species_i_temp = jax.block_until_ready(Ts_in_cells(xs_n,vs_n,ms,weight,
@@ -205,13 +207,14 @@ def simulation(steps_per_snapshot,total_steps,ICs,ext_fields,dx,dt,
                 datas.append(jnp.insert(species_i_velocities,0,v_rms))
                 
             for i,data in enumerate(datas):
+                #Write data to files
                 with open(path_to_file+datafile_names[i],'a') as f:
                     writer = csv.writer(f)
                     writer.writerow(data)
 
         elif write_to_file == False:
-            
             for i, indices in enumerate(pseudospecies_indices):
+                #Find temperature for each species
                 species_i_temp = jax.block_until_ready(Ts_in_cells(xs_n,vs_n,ms,weight,
                                                                    indices[0],indices[1],dx,grid,grid_start))
                 datas.append(species_i_temp)

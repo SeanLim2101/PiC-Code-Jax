@@ -53,7 +53,7 @@ def Ts_in_cells(xs_n,vs_n,ms,weight,species_start,species_end,dx,grid,grid_start
         cell = cells[i]
         m = ms[i,0]/weight
         vnet = v-vds[cell]
-        T = T.at[cell].set(T[cell]+(m/(3*1.38e-23))*jnp.dot(vnet,vnet))
+        T = T.at[cell].set(T[cell]+(m/(3*1.38e-23))*jnp.dot(vnet,vnet)) #1/2mv^2=3/2kT
         return T
     Ts = jax.lax.fori_loop(species_start,species_end,T_per_part,Ts)
     Ts=vmap(jnp.divide)(Ts,parts_per_cell)
@@ -62,8 +62,10 @@ def Ts_in_cells(xs_n,vs_n,ms,weight,species_start,species_end,dx,grid,grid_start
 
 @partial(jit,static_argnums = (1,2))
 def histogram_velocities_x(vs_n,species_start,species_end):
+    #Find vrms at current step for specified particles
     vs_sq = vmap(jnp.dot)(vs_n[species_start:species_end,0],vs_n[species_start:species_end,0])
     v_rms = jnp.sqrt(jnp.sum(vs_sq)/(species_end-species_start))
+    #Histogram based on vrms
     bins = jnp.linspace(-3*v_rms,3*v_rms,31)
     hist_vals = jnp.histogram(vs_n[species_start:species_end,0],bins)[0]
     return v_rms, hist_vals
